@@ -19,11 +19,11 @@ const submissionSchema = new Schema({
   language: {
     type: String,
     required: true,
-    enum: ['javascript', 'c++', 'java'],
+    enum: ['javascript', 'c++', 'java', 'python3'],
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'wrong', 'error'],
+    enum: ['pending', 'accepted', 'wrong', 'tle', 'compile_error', 'runtime_error', 'error'],
     default: 'pending'
   },
   runtime: {

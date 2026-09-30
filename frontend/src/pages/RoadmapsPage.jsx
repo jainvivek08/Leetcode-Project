@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { useSelector } from 'react-redux';
 import {
   Compass,
@@ -914,7 +914,6 @@ return -1;`,
  * 3-state interactive problem checklist, and modal DSA cheat sheets.
  */
 function RoadmapsPage() {
-  const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth || {});
 
   // 1. Active Track State
@@ -1203,7 +1202,6 @@ function RoadmapsPage() {
                   if (s === 'solved') trackSolved++;
                 });
               });
-              const trackPercent = trackTotal > 0 ? Math.round((trackSolved / trackTotal) * 100) : 0;
 
               return (
                 <button

@@ -81,8 +81,11 @@ const problemSchema = new Schema({
         ref:'user',
         required:true
     }
-})
+});
 
+problemSchema.index({ difficulty: 1 });
+problemSchema.index({ tags: 1 });
+problemSchema.index({ title: 1 });
 
 const Problem = mongoose.model('problem',problemSchema);
 

@@ -34,7 +34,7 @@ import {
   AlertCircle,
   Copy,
 } from 'lucide-react';
-import axiosClient from '../utils/axiosClient';
+import axiosClient, { getApiErrorMessage } from '../utils/axiosClient';
 import { logoutUser } from '../authSlice';
 import SubmissionHistory from '../components/SubmissionHistory';
 import ChatAi from '../components/ChatAi';
@@ -174,42 +174,6 @@ public:
                 current_depth -= 1
                 
         return max_depth`,
-    },
-  ],
-  referenceSolution: [
-    {
-      language: 'JavaScript',
-      completeCode: `var maxDepth = function(s) {
-    let current = 0, ans = 0;
-    for (let c of s) {
-        if (c === '(') ans = Math.max(ans, ++current);
-        else if (c === ')') current--;
-    }
-    return ans;
-};`,
-    },
-    {
-      language: 'C++',
-      completeCode: `int maxDepth(string s) {
-    int cur = 0, ans = 0;
-    for (char c : s) {
-        if (c == '(') ans = max(ans, ++cur);
-        else if (c == ')') cur--;
-    }
-    return ans;
-}`,
-    },
-    {
-      language: 'Python3',
-      completeCode: `def maxDepth(s: str) -> int:
-    cur = ans = 0
-    for c in s:
-        if c == '(':
-            cur += 1
-            ans = max(ans, cur)
-        elif c == ')':
-            cur -= 1
-    return ans`,
     },
   ],
 };
@@ -453,7 +417,6 @@ function SolveProblemPage() {
   const [consoleOpen, setConsoleOpen] = useState(true);
   const [consoleTab, setConsoleTab] = useState('testcase'); // 'testcase' | 'result'
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(0);
-  const [customTestInput, setCustomTestInput] = useState('');
 
   // Execution states
   const [isRunning, setIsRunning] = useState(false);
@@ -532,7 +495,7 @@ function SolveProblemPage() {
           setIsSolved(solved);
           setStreakCount(data.length > 0 ? 1 : 0);
         }
-      } catch (e) {
+      } catch {
         // guest or unauthenticated
       }
     };
@@ -541,7 +504,7 @@ function SolveProblemPage() {
     return () => {
       isMounted = false;
     };
-  }, [problemId]);
+  }, [problemId, selectedLang]);
 
   // Load starter code according to selected language
   const loadStarterCode = (prob, lang) => {
@@ -613,6 +576,19 @@ function SolveProblemPage() {
     }
 
     if (!problem) return;
+
+    if (code && code.length > 64000) {
+      triggerToast('Code is too large (max 64 KB)', '⚠️');
+      setRunResult({
+        success: false,
+        status: 'Error',
+        error: 'Code is too large (max 64 KB)',
+      });
+      setConsoleOpen(true);
+      setConsoleTab('result');
+      return;
+    }
+
     setIsRunning(true);
     setRunResult(null);
     setConsoleOpen(true);
@@ -625,6 +601,11 @@ function SolveProblemPage() {
           language: selectedLang,
         });
         setRunResult(response.data);
+        if (response.data?.success || response.data?.status === 'accepted') {
+          triggerToast('All test cases passed! ✨', '✓');
+        } else {
+          triggerToast('Testcase execution failed', '⚠');
+        }
       } else {
         // Simulated LeetCode Accepted Response
         await new Promise((r) => setTimeout(r, 650));
@@ -650,16 +631,17 @@ function SolveProblemPage() {
             },
           ],
         });
+        triggerToast('All test cases passed! ✨', '✓');
       }
-      triggerToast('All test cases passed! ✨', '✓');
     } catch (err) {
       console.error('Run code error:', err);
+      const errMsg = getApiErrorMessage(err);
       setRunResult({
         success: false,
         status: 'Runtime Error',
-        error: err.response?.data?.message || err.message || 'Execution error encountered',
+        error: errMsg,
       });
-      triggerToast('Testcase execution failed', '⚠');
+      triggerToast(errMsg, '⚠');
     } finally {
       setIsRunning(false);
     }
@@ -676,6 +658,18 @@ function SolveProblemPage() {
     }
 
     if (!problem) return;
+
+    if (code && code.length > 64000) {
+      triggerToast('Code is too large (max 64 KB)', '⚠️');
+      setSubmitResult({
+        status: 'Error',
+        error: 'Code is too large (max 64 KB)',
+      });
+      setConsoleOpen(true);
+      setConsoleTab('result');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitResult(null);
     setConsoleOpen(true);
@@ -688,8 +682,13 @@ function SolveProblemPage() {
           language: selectedLang,
         });
         setSubmitResult(response.data);
-        setIsSolved(true);
-        setStreakCount(1);
+        if (response.data?.accepted || response.data?.status === 'accepted') {
+          setIsSolved(true);
+          setStreakCount(1);
+          triggerToast('Solution Accepted! 🎉', '🏆');
+        } else {
+          triggerToast('Submission rejected', '❌');
+        }
       } else {
         // Simulated LeetCode Submission
         await new Promise((r) => setTimeout(r, 900));
@@ -702,15 +701,16 @@ function SolveProblemPage() {
           testcasesPassed: '42 / 42 testcases passed',
         });
         setIsSolved(true);
+        triggerToast('Solution Accepted! 🎉', '🏆');
       }
-      triggerToast('Solution Accepted! 🎉', '🏆');
     } catch (err) {
       console.error('Submit code error:', err);
+      const errMsg = getApiErrorMessage(err);
       setSubmitResult({
         status: 'Wrong Answer',
-        error: err.response?.data?.message || 'Hidden test case failed on input boundary',
+        error: errMsg,
       });
-      triggerToast('Submission rejected', '❌');
+      triggerToast(errMsg, '❌');
     } finally {
       setIsSubmitting(false);
     }
@@ -1112,20 +1112,29 @@ function SolveProblemPage() {
                   </h2>
                 </div>
 
+                {/* If problem has a solution video, show video section */}
+                {problem?.secureUrl && (
+                  <Editorial
+                    secureUrl={problem.secureUrl}
+                    thumbnailUrl={problem.thumbnailUrl}
+                    duration={problem.duration}
+                  />
+                )}
+
                 <div className="space-y-4">
-                  {(problem.referenceSolution || DEFAULT_PROBLEM.referenceSolution).map(
-                    (sol, idx) => (
+                  {problem?.referenceSolution && problem.referenceSolution.length > 0 ? (
+                    problem.referenceSolution.map((sol, idx) => (
                       <div
                         key={idx}
                         className="bg-zinc-900/80 border border-zinc-800 rounded-xl overflow-hidden shadow-xs"
                       >
                         <div className="px-4 py-2.5 bg-zinc-800/80 border-b border-zinc-700/60 flex items-center justify-between">
                           <span className="font-mono font-bold text-xs text-white">
-                            {sol.language}
+                            {sol?.language}
                           </span>
                           <button
                             type="button"
-                            onClick={() => handleCopyCode(sol.completeCode)}
+                            onClick={() => handleCopyCode(sol?.completeCode || '')}
                             className="text-zinc-400 hover:text-white p-1 text-xs flex items-center gap-1 rounded hover:bg-zinc-700 transition"
                           >
                             <Copy className="w-3.5 h-3.5" />
@@ -1133,10 +1142,16 @@ function SolveProblemPage() {
                           </button>
                         </div>
                         <pre className="p-4 text-xs font-mono text-zinc-300 overflow-x-auto leading-relaxed">
-                          <code>{sol.completeCode}</code>
+                          <code>{sol?.completeCode}</code>
                         </pre>
                       </div>
-                    )
+                    ))
+                  ) : (
+                    <div className="p-6 bg-zinc-900/60 rounded-xl border border-zinc-800 text-center">
+                      <p className="text-sm text-zinc-400">
+                        Official solutions are not available yet. Check the Editorial/Video tab.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1383,9 +1398,12 @@ function SolveProblemPage() {
                       <div className="space-y-3">
                         {/* Status Header */}
                         <div className="flex items-center gap-3">
-                          {(runResult?.status === 'Accepted' ||
+                          {(runResult?.status === 'accepted' ||
+                            runResult?.status === 'Accepted' ||
+                            submitResult?.status === 'accepted' ||
                             submitResult?.status === 'Accepted' ||
-                            runResult?.success) ? (
+                            (runResult?.success && !runResult?.status) ||
+                            (submitResult?.accepted && !submitResult?.status)) ? (
                             <span className="text-emerald-400 font-bold text-sm flex items-center gap-1.5">
                               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                               <span>Accepted</span>
@@ -1394,7 +1412,15 @@ function SolveProblemPage() {
                             <span className="text-rose-400 font-bold text-sm flex items-center gap-1.5">
                               <XCircle className="w-4 h-4 text-rose-400" />
                               <span>
-                                {runResult?.status || submitResult?.status || 'Runtime Error'}
+                                {(() => {
+                                  const rawStatus = (submitResult?.status || runResult?.status || '').toLowerCase();
+                                  if (rawStatus === 'compile_error' || rawStatus === 'compilation error') return 'Compilation Error';
+                                  if (rawStatus === 'runtime_error' || rawStatus === 'runtime error') return 'Runtime Error';
+                                  if (rawStatus === 'tle' || rawStatus === 'time limit exceeded') return 'Time Limit Exceeded';
+                                  if (rawStatus === 'wrong' || rawStatus === 'wrong answer') return 'Wrong Answer';
+                                  if (rawStatus === 'error') return 'Error';
+                                  return submitResult?.status || runResult?.status || 'Runtime Error';
+                                })()}
                               </span>
                             </span>
                           )}
@@ -1402,16 +1428,39 @@ function SolveProblemPage() {
                           <span className="text-zinc-500 font-sans text-xs">
                             Runtime:{' '}
                             <strong className="text-zinc-300">
-                              {runResult?.runtime || submitResult?.runtime || '2 ms'}
+                              {runResult?.runtime != null
+                                ? (typeof runResult.runtime === 'number' ? `${runResult.runtime} ms` : runResult.runtime)
+                                : submitResult?.runtime != null
+                                ? (typeof submitResult.runtime === 'number' ? `${submitResult.runtime} ms` : submitResult.runtime)
+                                : '—'}
                             </strong>
                           </span>
                           <span className="text-zinc-500 font-sans text-xs">
                             Memory:{' '}
                             <strong className="text-zinc-300">
-                              {runResult?.memory || submitResult?.memory || '42.1 MB'}
+                              {runResult?.memory != null
+                                ? (typeof runResult.memory === 'number' ? `${runResult.memory} kB` : runResult.memory)
+                                : submitResult?.memory != null
+                                ? (typeof submitResult.memory === 'number' ? `${submitResult.memory} kB` : submitResult.memory)
+                                : '—'}
                             </strong>
                           </span>
+                          {submitResult?.passedTestCases != null && submitResult?.totalTestCases != null && (
+                            <span className="text-zinc-500 font-sans text-xs">
+                              Passed:{' '}
+                              <strong className="text-zinc-300">
+                                {submitResult.passedTestCases}/{submitResult.totalTestCases}
+                              </strong>
+                            </span>
+                          )}
                         </div>
+
+                        {/* Error Message Box if errorMessage or error is present */}
+                        {(runResult?.errorMessage || submitResult?.errorMessage || runResult?.error || submitResult?.error) && (
+                          <div className="p-3 bg-rose-950/20 border border-rose-800/40 rounded-xl text-xs text-rose-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-48 leading-relaxed">
+                            {runResult?.errorMessage || submitResult?.errorMessage || runResult?.error || submitResult?.error}
+                          </div>
+                        )}
 
                         {/* Cases summary box */}
                         <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg space-y-1.5">

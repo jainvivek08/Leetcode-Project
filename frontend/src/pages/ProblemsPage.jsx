@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useSelector, useDispatch } from 'react-redux';
 import {
@@ -20,7 +20,6 @@ import {
 import axiosClient from '../utils/axiosClient';
 import ProfileDropdown from '../components/profile/ProfileDropdown';
 import { logoutUser } from '../authSlice';
-import { useTheme } from '../utils/theme';
 
 /**
  * Base Problem Metadata for the user's real MongoDB questions
@@ -267,6 +266,16 @@ const TOPIC_TAG_MAP = {
   matrix: 'Graphs & Matrix',
 };
 
+const TOPIC_TO_TAG_MAP = {
+  'Mathematics': 'math',
+  'Arrays': 'array',
+  'Strings': 'string',
+  'Recursion': 'recursion',
+  'Dynamic Programming': 'dp',
+  'Linked List': 'linkedList',
+  'Graphs & Matrix': 'graph',
+};
+
 /**
  * ProblemsPage Component
  * Renders the user's authentic questions grouped by topic and difficulty tier.
@@ -275,7 +284,6 @@ function ProblemsPage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { isDark } = useTheme();
 
   // View state: 'list' | 'grid'
   const [viewMode, setViewMode] = useState('list');
@@ -294,6 +302,11 @@ function ProblemsPage() {
   const [liveProblems, setLiveProblems] = useState(BASE_PROBLEMS_DATA);
   const [solvedIds, setSolvedIds] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProblems, setTotalProblems] = useState(BASE_PROBLEMS_DATA.length);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const reqIdRef = useRef(0);
 
   // Accordion state:
   // Level 1: Topic expanded (default: Mathematics and Arrays open)
@@ -323,28 +336,63 @@ function ProblemsPage() {
     navigate('/login');
   };
 
-  // 1. Fetch real problems from MongoDB API
+  // Debounce search input (300 ms)
   useEffect(() => {
-    const fetchApiProblems = async () => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Reset to page 1 when any filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedTopic, selectedDifficulty, selectedSort]);
+
+  // Fetch paginated & filtered problems from MongoDB API
+  useEffect(() => {
+    const currentReqId = ++reqIdRef.current;
+
+    const fetchProblems = async () => {
       try {
         setLoading(true);
-        const { data } = await axiosClient.get('/problem/getAllProblem');
-        if (data && Array.isArray(data) && data.length > 0) {
-          // Merge with enriched meta
-          const merged = data.map((apiP) => {
+        const params = {
+          page,
+          limit: 20,
+          sort: selectedSort === 'alpha' ? 'title' : 'newest',
+        };
+
+        if (debouncedSearch.trim()) {
+          params.search = debouncedSearch.trim();
+        }
+
+        if (selectedDifficulty !== 'All') {
+          params.difficulty = selectedDifficulty.toLowerCase();
+        }
+
+        if (selectedTopic !== 'All') {
+          params.tag = TOPIC_TO_TAG_MAP[selectedTopic] || selectedTopic.toLowerCase();
+        }
+
+        const { data } = await axiosClient.get('/problem/list', { params });
+
+        // Request race check: ignore stale response
+        if (currentReqId !== reqIdRef.current) return;
+
+        if (data && Array.isArray(data.problems)) {
+          const merged = data.problems.map((apiP) => {
             const foundMeta = BASE_PROBLEMS_DATA.find(
               (bp) =>
                 bp._id === apiP._id ||
-                bp.title.toLowerCase().trim() ===
+                bp.title?.toLowerCase().trim() ===
                   apiP.title?.toLowerCase().trim()
             );
 
-            // Determine topic from tags
             let topicName = 'Arrays';
             if (foundMeta?.topic) {
               topicName = foundMeta.topic;
             } else if (apiP.tags) {
-              const primaryTag = apiP.tags.split(',')[0].toLowerCase().trim();
+              const primaryTag = String(apiP.tags).split(',')[0].toLowerCase().trim();
               topicName = TOPIC_TAG_MAP[primaryTag] || 'Arrays';
             }
 
@@ -364,28 +412,40 @@ function ProblemsPage() {
           });
 
           setLiveProblems(merged);
+          setTotalProblems(data.total || 0);
+          setTotalPages(data.totalPages || 1);
         }
       } catch (err) {
-        console.error('Using local MongoDB dataset for problems:', err);
+        if (currentReqId === reqIdRef.current) {
+          console.error('Failed to fetch problems from /problem/list:', err);
+        }
       } finally {
-        setLoading(false);
+        if (currentReqId === reqIdRef.current) {
+          setLoading(false);
+        }
       }
     };
 
+    fetchProblems();
+  }, [page, debouncedSearch, selectedTopic, selectedDifficulty, selectedSort]);
+
+  // Fetch solved problems by logged in user
+  useEffect(() => {
     const fetchSolvedProblems = async () => {
       try {
         const { data } = await axiosClient.get('/problem/problemSolvedByUser');
         if (Array.isArray(data)) {
           setSolvedIds(data.map((sp) => sp._id));
         }
-      } catch (err) {
+      } catch {
         // Guest user or not logged in
       }
     };
 
-    fetchApiProblems();
     if (user) {
       fetchSolvedProblems();
+    } else {
+      setSolvedIds([]);
     }
   }, [user]);
 
@@ -721,7 +781,7 @@ function ProblemsPage() {
             {/* Total Problems Count Pill */}
             <div className="inline-flex items-center px-3.5 py-1 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-full">
               <span className="text-xs font-black tracking-wider text-slate-600 dark:text-slate-300 uppercase font-mono">
-                {liveProblems.length} PROBLEMS
+                {totalProblems} PROBLEMS
               </span>
             </div>
           </div>
@@ -994,12 +1054,17 @@ function ProblemsPage() {
           {/* ============================================================ */}
           {/* 3-LEVEL HIERARCHICAL ACCORDION LIST                          */}
           {/* ============================================================ */}
-          {viewMode === 'list' ? (
+          {loading ? (
+            <div className="p-16 flex flex-col items-center justify-center space-y-3">
+              <span className="loading loading-spinner loading-lg text-blue-600"></span>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Loading problems...</p>
+            </div>
+          ) : viewMode === 'list' ? (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {hierarchicalTopics.length === 0 ? (
                 <div className="p-12 text-center">
                   <p className="text-slate-400 text-sm font-semibold">
-                    No problems found matching your current filters.
+                    No problems match your filters.
                   </p>
                   <button
                     type="button"
@@ -1250,6 +1315,36 @@ function ProblemsPage() {
               ))}
             </div>
           )}
+
+          {/* Pagination Controls */}
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              Showing page <span className="font-bold text-slate-800 dark:text-slate-200">{page}</span> of{' '}
+              <span className="font-bold text-slate-800 dark:text-slate-200">{totalPages || 1}</span> ({totalProblems} {totalProblems === 1 ? 'problem' : 'problems'})
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                disabled={page <= 1 || loading}
+                className="px-3.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="text-xs font-mono font-bold px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-lg">
+                Page {page} of {totalPages || 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.min(prev + 1, totalPages || 1))}
+                disabled={page >= (totalPages || 1) || loading}
+                className="px-3.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </main>
 

@@ -127,20 +127,25 @@ const saveVideoMetadata = async (req, res) => {
 };
 
 
+const deleteCloudinaryVideo = async (publicId) => {
+  if (!publicId) return null;
+  return await cloudinary.uploader.destroy(publicId, { resource_type: 'video', invalidate: true });
+};
+
 const deleteVideo = async (req, res) => {
   try {
     const { problemId } = req.params;
     const userId = req.result._id;
 
     const video = await SolutionVideo.findOneAndDelete({problemId:problemId});
-    
-   
 
     if (!video) {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    await cloudinary.uploader.destroy(video.cloudinaryPublicId, { resource_type: 'video' , invalidate: true });
+    if (video.cloudinaryPublicId) {
+      await deleteCloudinaryVideo(video.cloudinaryPublicId);
+    }
 
     res.json({ message: 'Video deleted successfully' });
 
@@ -150,4 +155,4 @@ const deleteVideo = async (req, res) => {
   }
 };
 
-module.exports = {generateUploadSignature,saveVideoMetadata,deleteVideo};
+module.exports = {generateUploadSignature,saveVideoMetadata,deleteVideo,deleteCloudinaryVideo};

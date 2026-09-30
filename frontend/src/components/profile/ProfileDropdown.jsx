@@ -29,11 +29,9 @@ export function ProfileDropdown({
   onLogout,
   className = '',
 }) {
-  if (!user) return null;
-
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
-  const { theme, isDark, setTheme } = useTheme();
+  const { isDark, setTheme } = useTheme();
 
   // Derived user identity with clean fallbacks
   const displayName =
@@ -95,6 +93,8 @@ export function ProfileDropdown({
     if (callback) callback();
     setIsOpen(false);
   };
+
+  if (!user) return null;
 
   return (
     <div ref={dropdownRef} className={`relative inline-block text-left ${className}`}>

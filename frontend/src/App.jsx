@@ -8,7 +8,7 @@ import SettingsPage from "./pages/SettingsPage";
 import ProblemsPage from "./pages/ProblemsPage";
 import RoadmapsPage from "./pages/RoadmapsPage";
 import { useDispatch, useSelector } from 'react-redux';
-import { checkAuth } from "./authSlice";
+import { checkAuth, logoutUser } from "./authSlice";
 import { useEffect } from "react";
 import AdminPanel from "./components/AdminPanel";
 import SolveProblemPage from "./pages/SolveProblemPage";
@@ -26,6 +26,15 @@ function App(){
   // check initial authentication
   useEffect(() => {
     dispatch(checkAuth());
+  }, [dispatch]);
+
+  // Listen for global 401 session expiration
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      dispatch(logoutUser());
+    };
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => window.removeEventListener('auth:expired', handleAuthExpired);
   }, [dispatch]);
   
   if (loading) {

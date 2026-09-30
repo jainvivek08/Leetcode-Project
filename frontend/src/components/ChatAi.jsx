@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import axiosClient from '../utils/axiosClient';
+import axiosClient, { getApiErrorMessage } from '../utils/axiosClient';
 import {
   Send,
   Sparkles,
@@ -243,9 +243,7 @@ function ChatAi({ problem, onRequireAuth }) {
       ]);
     } catch (error) {
       console.error('AI Chat Error:', error);
-      const errMsg =
-        error.response?.data?.message ||
-        'Unable to reach AI DSA engine. Please check your network connection and try again.';
+      const errMsg = getApiErrorMessage(error);
       setMessages((prev) => [
         ...prev,
         {
@@ -419,12 +417,19 @@ function ChatAi({ problem, onRequireAuth }) {
             ref={inputRef}
             id="chat-ai-input"
             type="text"
+            maxLength={2000}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask AI tutor for hints, approaches, or debugging..."
             disabled={isLoading}
             className="bg-transparent text-xs md:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none flex-1 font-sans disabled:opacity-50"
           />
+
+          {input.length > 1500 && (
+            <span className="text-[10px] font-mono text-zinc-400 shrink-0">
+              {input.length}/2000
+            </span>
+          )}
 
           <button
             id="chat-ai-send-btn"

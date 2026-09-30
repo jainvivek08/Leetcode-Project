@@ -1,7 +1,7 @@
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import axiosClient from '../utils/axiosClient';
+import axiosClient, { getApiErrorMessage } from '../utils/axiosClient';
 import { useNavigate } from 'react-router';
 
 // Zod schema matching the problem schema
@@ -84,7 +84,7 @@ function AdminPanel() {
       alert('Problem created successfully!');
       navigate('/');
     } catch (error) {
-      alert(`Error: ${error.response?.data?.message || error.message}`);
+      alert(`Error: ${getApiErrorMessage(error)}`);
     }
   };
 

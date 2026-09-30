@@ -73,12 +73,35 @@ const SubmissionHistory = ({ problemId }) => {
             <span>Wrong Answer</span>
           </span>
         );
-      case 'error':
+      case 'tle':
+      case 'time limit exceeded':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <Clock className="w-3 h-3" />
+            <span>Time Limit Exceeded</span>
+          </span>
+        );
+      case 'compile_error':
+      case 'compilation error':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-500/10 text-orange-400 border border-orange-500/20">
+            <AlertCircle className="w-3 h-3" />
+            <span>Compilation Error</span>
+          </span>
+        );
+      case 'runtime_error':
       case 'runtime error':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            <AlertCircle className="w-3 h-3" />
+            <span>Runtime Error</span>
+          </span>
+        );
+      case 'error':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
             <AlertCircle className="w-3 h-3" />
-            <span>Runtime Error</span>
+            <span>Error</span>
           </span>
         );
       case 'pending':
@@ -189,7 +212,7 @@ const SubmissionHistory = ({ problemId }) => {
                         {sub.language || 'Code'}
                       </td>
                       <td className="py-3 px-3 font-mono text-zinc-300">
-                        {sub.runtime ? `${sub.runtime}s` : '—'}
+                        {sub.runtime != null ? `${sub.runtime} ms` : '—'}
                       </td>
                       <td className="py-3 px-3 font-mono text-zinc-300">
                         {formatMemory(sub.memory)}
@@ -248,7 +271,7 @@ const SubmissionHistory = ({ problemId }) => {
               {selectedSubmission.runtime && (
                 <div className="flex items-center gap-1 text-zinc-400 font-mono">
                   <Clock className="w-3 h-3 text-zinc-500" />
-                  <span>{selectedSubmission.runtime}s</span>
+                  <span>{selectedSubmission.runtime} ms</span>
                 </div>
               )}
               {selectedSubmission.memory && (

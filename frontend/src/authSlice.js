@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import axiosClient from './utils/axiosClient'
+import axiosClient, { getApiErrorMessage } from './utils/axiosClient'
 
 export const registerUser = createAsyncThunk(
   'auth/register',
@@ -8,7 +8,7 @@ export const registerUser = createAsyncThunk(
       const response = await axiosClient.post('/user/register', userData);
       return response.data.user;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      return rejectWithValue(getApiErrorMessage(error));
     }
   }
 );
@@ -21,7 +21,7 @@ export const loginUser = createAsyncThunk(
       const response = await axiosClient.post('/user/login', credentials);
       return response.data.user;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      return rejectWithValue(getApiErrorMessage(error));
     }
   }
 );
@@ -36,7 +36,7 @@ export const checkAuth = createAsyncThunk(
       if (error.response?.status === 401) {
         return rejectWithValue(null); // Special case for no session
       }
-      return rejectWithValue(error.response?.data || error.message);
+      return rejectWithValue(getApiErrorMessage(error));
     }
   }
 );
@@ -48,10 +48,11 @@ export const logoutUser = createAsyncThunk(
       await axiosClient.post('/user/logout');
       return null;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      return rejectWithValue(getApiErrorMessage(error));
     }
   }
 );
+
 
 const authSlice = createSlice({
   name: 'auth',
@@ -120,7 +121,7 @@ const authSlice = createSlice({
         state.user = action.payload;
         state.error = null;
       })
-      .addCase(checkAuth.rejected, (state, action) => {
+      .addCase(checkAuth.rejected, (state) => {
         state.loading = false;
         // Do not set error for routine 401 unauthenticated check
         state.error = null;

@@ -7,11 +7,27 @@ const solveDoubt = async(req , res)=>{
     try{
 
         const {messages,title,description,testCases,startCode} = req.body;
+
+        if (!Array.isArray(messages)) {
+            return res.status(400).json({ message: "Messages must be an array" });
+        }
+
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_KEY });
 
+        // Cap messages to the last 20 items and cap each message text to 4000 chars
+        const cappedMessages = messages.slice(-20).map(m => {
+            if (!m || typeof m !== 'object') return m;
+            const parts = Array.isArray(m.parts) ? m.parts.map(p => {
+                if (p && typeof p.text === 'string') {
+                    return { ...p, text: p.text.slice(0, 4000) };
+                }
+                return p;
+            }) : [];
+            return { ...m, parts };
+        });
+
         // Sanitize messages: filter out any previous error messages
-        let validContents = Array.isArray(messages) ? [...messages] : [];
-        validContents = validContents.filter(m => {
+        let validContents = cappedMessages.filter(m => {
             const text = m.parts?.[0]?.text;
             return text && !text.includes("Error from AI Chatbot");
         });
@@ -25,17 +41,21 @@ const solveDoubt = async(req , res)=>{
             validContents.push({ role: 'user', parts: [{ text: "Can you help me understand this problem?" }] });
         }
 
-        const formattedTestCases = typeof testCases === 'object' ? JSON.stringify(testCases, null, 2) : testCases;
-        const formattedStartCode = typeof startCode === 'object' ? JSON.stringify(startCode, null, 2) : startCode;
+        // Cap title/description/testCases/startCode fields (10000 chars each, truncate)
+        const safeTitle = String(title || '').slice(0, 10000);
+        const safeDescription = String(description || '').slice(0, 10000);
+        const formattedTestCases = (typeof testCases === 'object' ? JSON.stringify(testCases, null, 2) : String(testCases || '')).slice(0, 10000);
+        const formattedStartCode = (typeof startCode === 'object' ? JSON.stringify(startCode, null, 2) : String(startCode || '')).slice(0, 10000);
        
         const systemInstruction = `
 You are an expert Data Structures and Algorithms (DSA) tutor specializing in helping users solve coding problems. Your role is strictly limited to DSA-related assistance only.
 
 ## CURRENT PROBLEM CONTEXT:
-[PROBLEM_TITLE]: ${title}
-[PROBLEM_DESCRIPTION]: ${description}
+[PROBLEM_TITLE]: ${safeTitle}
+[PROBLEM_DESCRIPTION]: ${safeDescription}
 [EXAMPLES]: ${formattedTestCases}
 [startCode]: ${formattedStartCode}
+
 
 
 ## YOUR CAPABILITIES:

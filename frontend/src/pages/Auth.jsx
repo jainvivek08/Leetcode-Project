@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router';
 import { useDispatch, useSelector } from 'react-redux';
-import { loginUser, registerUser } from '../authSlice';
+import { loginUser, registerUser, clearError } from '../authSlice';
+import { getApiErrorMessage } from '../utils/axiosClient';
 import AuthNavbar from '../components/auth/AuthNavbar';
 import AuthFooter from '../components/auth/AuthFooter';
 import AuthBackground from '../components/auth/AuthBackground';
@@ -68,6 +69,7 @@ function Auth({ defaultMode }) {
   const handleModeChange = (newMode) => {
     setMode(newMode);
     setValidationError('');
+    dispatch(clearError());
     if (newMode === 'signup' && location.pathname !== '/signup') {
       navigate('/signup', { replace: true, state: location.state });
     } else if (newMode === 'signin' && location.pathname !== '/login') {
@@ -132,27 +134,36 @@ function Auth({ defaultMode }) {
     }
 
     if (password.length < 8) {
-      setValidationError('Password must be at least 8 characters.');
+      setValidationError('Password must be at least 8 characters long.');
       return;
     }
 
     setIsSubmitting(true);
+    dispatch(clearError());
 
     try {
       if (mode === 'signin') {
-        const result = await dispatch(loginUser({ emailId: email.trim(), password }));
+        const result = await dispatch(loginUser({ emailId: email.trim().toLowerCase(), password }));
         if (loginUser.fulfilled.match(result)) {
           triggerToast('Signed in successfully!', '🎉');
           const destination = location.state?.from || '/problems';
           navigate(destination, { replace: true });
         } else {
+          const errMsg = typeof result.payload === 'string' ? result.payload : getApiErrorMessage(result.payload || result.error || 'Login failed');
+          setValidationError(errMsg);
           setIsSubmitting(false);
         }
       } else {
+        const nameParts = fullName.trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        // Whitelist: send only firstName, lastName, emailId, password
         const result = await dispatch(
           registerUser({
-            firstName: fullName.trim(),
-            emailId: email.trim(),
+            firstName,
+            lastName,
+            emailId: email.trim().toLowerCase(),
             password,
           })
         );
@@ -161,10 +172,13 @@ function Auth({ defaultMode }) {
           const destination = location.state?.from || '/problems';
           navigate(destination, { replace: true });
         } else {
+          const errMsg = typeof result.payload === 'string' ? result.payload : getApiErrorMessage(result.payload || result.error || 'Registration failed');
+          setValidationError(errMsg);
           setIsSubmitting(false);
         }
       }
-    } catch {
+    } catch (err) {
+      setValidationError(getApiErrorMessage(err));
       setIsSubmitting(false);
     }
   };

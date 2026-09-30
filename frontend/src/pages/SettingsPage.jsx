@@ -21,6 +21,7 @@ import {
 import ProfileDropdown from '../components/profile/ProfileDropdown';
 import { logoutUser } from '../authSlice';
 import { useTheme } from '../utils/theme';
+import axiosClient, { getApiErrorMessage } from '../utils/axiosClient';
 
 /**
  * SettingsPage Component
@@ -34,11 +35,13 @@ import { useTheme } from '../utils/theme';
  * 4. Personalized Ads
  * 5. Notifications
  */
+const VALID_TABS = ['handle', 'emails', 'appearance', 'ads', 'notifications'];
+
 function SettingsPage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, isAuthenticated } = useSelector((state) => state.auth);
+  const { user } = useSelector((state) => state.auth);
 
   // Theme Hook (Light / Dark)
   const { theme, isDark, setTheme } = useTheme();
@@ -48,14 +51,13 @@ function SettingsPage() {
 
   // Tab State: 'handle' | 'emails' | 'appearance' | 'ads' | 'notifications'
   const initialTab = searchParams.get('tab') || 'handle';
-  const validTabs = ['handle', 'emails', 'appearance', 'ads', 'notifications'];
   const [activeTab, setActiveTab] = useState(
-    validTabs.includes(initialTab) ? initialTab : 'handle'
+    VALID_TABS.includes(initialTab) ? initialTab : 'handle'
   );
 
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab');
-    if (tabFromUrl && validTabs.includes(tabFromUrl)) {
+    if (tabFromUrl && VALID_TABS.includes(tabFromUrl)) {
       setActiveTab(tabFromUrl);
     }
   }, [searchParams]);
@@ -101,6 +103,19 @@ function SettingsPage() {
   const handleLogout = async () => {
     await dispatch(logoutUser());
     navigate('/login');
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmationText = 'This will permanently delete your account, submissions, and solved progress. This cannot be undone. Are you sure?';
+    if (!window.confirm(confirmationText)) return;
+
+    try {
+      await axiosClient.delete('/user/deleteProfile');
+      await dispatch(logoutUser());
+      navigate('/');
+    } catch (err) {
+      triggerToast(getApiErrorMessage(err) || 'Failed to delete account', '❌');
+    }
   };
 
   // --- Handlers ---
@@ -356,6 +371,25 @@ function SettingsPage() {
                   <p className="italic text-xs text-slate-500 leading-relaxed">
                     Note: We use caching at many places and the changes to your handle may take upto 48 hours to reflect everywhere.
                   </p>
+                </div>
+
+                {/* 4. Danger Zone: Delete Account */}
+                <div className="pt-8 border-t border-slate-200 dark:border-slate-800">
+                  <div className="p-4 bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/60 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="text-sm font-bold text-rose-800 dark:text-rose-400">Delete Account</h4>
+                      <p className="text-xs text-rose-600 dark:text-rose-300 mt-0.5">
+                        Permanently delete your CodeQuest profile, solved history, and all code submissions.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccount}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer shrink-0"
+                    >
+                      Delete Account
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

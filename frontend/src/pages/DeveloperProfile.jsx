@@ -108,7 +108,6 @@ function DeveloperProfile() {
   // Real backend data states
   const [allProblems, setAllProblems] = useState([]);
   const [solvedProblems, setSolvedProblems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [userRankData, setUserRankData] = useState(null);
 
   // Modal and Toast states
@@ -131,7 +130,6 @@ function DeveloperProfile() {
     let isMounted = true;
 
     const fetchData = async () => {
-      setIsLoading(true);
       try {
         const { data: allProbs } = await axiosClient.get('/problem/getAllProblem');
         if (isMounted && Array.isArray(allProbs)) {
@@ -159,10 +157,6 @@ function DeveloperProfile() {
         } catch (err) {
           console.warn('Could not fetch user rank:', err);
         }
-      }
-
-      if (isMounted) {
-        setIsLoading(false);
       }
     };
 

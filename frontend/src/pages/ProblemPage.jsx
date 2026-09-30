@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useForm } from 'react-hook-form';
 import Editor from '@monaco-editor/react';
 import { useParams } from 'react-router';
-import axiosClient from "../utils/axiosClient"
+import axiosClient, { getApiErrorMessage } from "../utils/axiosClient"
 import SubmissionHistory from "../components/SubmissionHistory"
 import ChatAi from '../components/ChatAi';
 import Editorial from '../components/Editorial';
@@ -28,7 +27,6 @@ const ProblemPage = () => {
 
   
 
-  const { handleSubmit } = useForm();
 
  useEffect(() => {
     const fetchProblem = async () => {
@@ -52,7 +50,7 @@ const ProblemPage = () => {
     };
 
     fetchProblem();
-  }, [problemId]);
+  }, [problemId, selectedLanguage]);
 
   // Update code when language changes
   useEffect(() => {
@@ -92,7 +90,7 @@ const ProblemPage = () => {
       console.error('Error running code:', error);
       setRunResult({
         success: false,
-        error: 'Internal server error'
+        error: getApiErrorMessage(error)
       });
       setLoading(false);
       setActiveRightTab('testcase');
@@ -115,7 +113,10 @@ const ProblemPage = () => {
       
     } catch (error) {
       console.error('Error submitting code:', error);
-      setSubmitResult(null);
+      setSubmitResult({
+        status: 'Wrong Answer',
+        errorMessage: getApiErrorMessage(error)
+      });
       setLoading(false);
       setActiveRightTab('result');
     }
@@ -239,19 +240,28 @@ const ProblemPage = () => {
               {activeLeftTab === 'solutions' && (
                 <div>
                   <h2 className="text-xl font-bold mb-4">Solutions</h2>
+                  {problem?.secureUrl && (
+                    <div className="mb-4">
+                      <Editorial secureUrl={problem.secureUrl} thumbnailUrl={problem.thumbnailUrl} duration={problem.duration}/>
+                    </div>
+                  )}
                   <div className="space-y-6">
-                    {problem.referenceSolution?.map((solution, index) => (
-                      <div key={index} className="border border-base-300 rounded-lg">
-                        <div className="bg-base-200 px-4 py-2 rounded-t-lg">
-                          <h3 className="font-semibold">{problem?.title} - {solution?.language}</h3>
+                    {problem?.referenceSolution && problem.referenceSolution.length > 0 ? (
+                      problem.referenceSolution.map((solution, index) => (
+                        <div key={index} className="border border-base-300 rounded-lg">
+                          <div className="bg-base-200 px-4 py-2 rounded-t-lg">
+                            <h3 className="font-semibold">{problem?.title} - {solution?.language}</h3>
+                          </div>
+                          <div className="p-4">
+                            <pre className="bg-base-300 p-4 rounded text-sm overflow-x-auto">
+                              <code>{solution?.completeCode}</code>
+                            </pre>
+                          </div>
                         </div>
-                        <div className="p-4">
-                          <pre className="bg-base-300 p-4 rounded text-sm overflow-x-auto">
-                            <code>{solution?.completeCode}</code>
-                          </pre>
-                        </div>
-                      </div>
-                    )) || <p className="text-gray-500">Solutions will be available after you solve the problem.</p>}
+                      ))
+                    ) : (
+                      <p className="text-gray-500">Official solutions are not available yet. Check the Editorial/Video tab.</p>
+                    )}
                   </div>
                 </div>
               )}
