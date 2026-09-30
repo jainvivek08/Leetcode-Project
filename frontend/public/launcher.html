@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeetCode Clone - Launcher Hub</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    body {
+      background: radial-gradient(circle at top, #1a1a2e, #0f0f1a);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      padding: 32px;
+      border-radius: 16px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffa116, #ff6b6b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p {
+      color: #aaa;
+      font-size: 0.95rem;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .primary-btn {
+      display: block;
+      width: 100%;
+      background: linear-gradient(135deg, #ffa116, #ff7a00);
+      color: #fff;
+      font-weight: 600;
+      font-size: 1.05rem;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .primary-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(255, 161, 22, 0.4);
+    }
+    .links-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .service-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #eee;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .service-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: #ffa116;
+    }
+    .badge {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: rgba(46, 213, 115, 0.2);
+      color: #2ed573;
+      margin-top: 6px;
+    }
+    .note {
+      font-size: 0.8rem;
+      color: #777;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>LeetCode Clone Launcher</h1>
+    <p>Neeche diye gaye button par click karke aap dono Frontend aur Backend ko ek sath open kar sakte hain:</p>
+
+    <button class="primary-btn" onclick="openBoth()">
+      🚀 Open Both Together (2 Tabs)
+    </button>
+
+    <div class="links-grid">
+      <a class="service-btn" href="http://localhost:5173" target="_blank">
+        <strong>Frontend (UI)</strong>
+        <span class="badge">Port 5173</span>
+      </a>
+      <a class="service-btn" href="http://localhost:3000" target="_blank">
+        <strong>Backend (API)</strong>
+        <span class="badge">Port 3000</span>
+      </a>
+    </div>
+
+    <p class="note">
+      💡 Tip: Main website sirf <b>Frontend (localhost:5173)</b> par chalti hai. Backend background mein automatically connect rehta hai.
+    </p>
+  </div>
+
+  <script>
+    function openBoth() {
+      window.open('http://localhost:5173', '_blank');
+      window.open('http://localhost:3000', '_blank');
+    }
+  </script>
+</body>
+</html>
