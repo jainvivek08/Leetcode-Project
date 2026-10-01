@@ -58,11 +58,20 @@ const submitCode = async (req,res)=>{
 
        try {
          // Judge0 code batch execution
+         const extraLimits = {};
+         if (typeof problem.timeLimit === 'number') {
+           extraLimits.cpu_time_limit = problem.timeLimit;
+         }
+         if (typeof problem.memoryLimit === 'number') {
+           extraLimits.memory_limit = problem.memoryLimit * 1024;
+         }
+
          const submissions = problem.hiddenTestCases.map((testcase)=>({
              source_code:code,
              language_id: languageId,
              stdin: testcase.input,
-             expected_output: testcase.output
+             expected_output: testcase.output,
+             ...extraLimits
          }));
 
          const submitResult = await submitBatch(submissions);
@@ -189,11 +198,20 @@ const runCode = async(req,res)=>{
 
       try {
         // Judge0 code ko submit karna hai
+        const extraLimits = {};
+        if (typeof problem.timeLimit === 'number') {
+          extraLimits.cpu_time_limit = problem.timeLimit;
+        }
+        if (typeof problem.memoryLimit === 'number') {
+          extraLimits.memory_limit = problem.memoryLimit * 1024;
+        }
+
         const submissions = problem.visibleTestCases.map((testcase)=>({
             source_code:code,
             language_id: languageId,
             stdin: testcase.input,
-            expected_output: testcase.output
+            expected_output: testcase.output,
+            ...extraLimits
         }));
 
         const submitResult = await submitBatch(submissions);

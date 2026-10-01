@@ -11,6 +11,7 @@ import ActivityHeatmap from '../components/profile/ActivityHeatmap';
 import RecentSubmissions from '../components/profile/RecentSubmissions';
 import EditProfileModal from '../components/profile/EditProfileModal';
 import { Sparkles, LogIn } from 'lucide-react';
+import { normalizeTags, tagLabel } from '../utils/tags';
 
 // Compress & resize image to light base64 data URL
 const compressImage = (dataUrl, maxWidth = 320, maxHeight = 320) => {
@@ -249,9 +250,9 @@ function DeveloperProfile() {
   const liveSkills = useMemo(() => {
     const tagCounts = {};
     solvedProblems.forEach((p) => {
-      if (p.tags) {
-        tagCounts[p.tags] = (tagCounts[p.tags] || 0) + 1;
-      }
+      normalizeTags(p.tags).forEach((tag) => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
     });
 
     const advanced = [];
@@ -259,12 +260,13 @@ function DeveloperProfile() {
     const fundamental = [];
 
     Object.entries(tagCounts).forEach(([tag, count]) => {
+      const displayName = tagLabel(tag);
       if (count >= 5) {
-        advanced.push({ name: tag, count });
+        advanced.push({ name: displayName, count });
       } else if (count >= 2) {
-        intermediate.push({ name: tag, count });
+        intermediate.push({ name: displayName, count });
       } else {
-        fundamental.push({ name: tag, count });
+        fundamental.push({ name: displayName, count });
       }
     });
 
@@ -298,7 +300,7 @@ function DeveloperProfile() {
         iconBg: 'from-blue-500 to-indigo-600',
       });
     }
-    if (solvedProblems.some((p) => p.tags?.toLowerCase().includes('array'))) {
+    if (solvedProblems.some((p) => normalizeTags(p.tags).some((t) => t.toLowerCase().includes('array')))) {
       badges.push({
         id: 'array-spec',
         title: 'Array Novice',

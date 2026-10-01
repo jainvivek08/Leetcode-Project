@@ -3,6 +3,7 @@ import { NavLink } from 'react-router'; // Fixed import
 import { useDispatch, useSelector } from 'react-redux';
 import axiosClient from '../utils/axiosClient';
 import { logoutUser } from '../authSlice';
+import { normalizeTags, tagLabel, CANONICAL_TAGS } from '../utils/tags';
 
 function Homepage() {
   const dispatch = useDispatch();
@@ -45,7 +46,7 @@ function Homepage() {
 
   const filteredProblems = problems.filter(problem => {
     const difficultyMatch = filters.difficulty === 'all' || problem.difficulty === filters.difficulty;
-    const tagMatch = filters.tag === 'all' || problem.tags === filters.tag;
+    const tagMatch = filters.tag === 'all' || normalizeTags(problem.tags).includes(filters.tag);
     const statusMatch = filters.status === 'all' || 
                       solvedProblems.some(sp => sp._id === problem._id);
     return difficultyMatch && tagMatch && statusMatch;
@@ -105,10 +106,11 @@ function Homepage() {
             onChange={(e) => setFilters({...filters, tag: e.target.value})}
           >
             <option value="all">All Tags</option>
-            <option value="array">Array</option>
-            <option value="linkedList">Linked List</option>
-            <option value="graph">Graph</option>
-            <option value="dp">DP</option>
+            {CANONICAL_TAGS.map((t) => (
+              <option key={t} value={t}>
+                {tagLabel(t)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -119,8 +121,8 @@ function Homepage() {
               <div className="card-body">
                 <div className="flex items-center justify-between">
                   <h2 className="card-title">
-                    <NavLink to={`/problem/${problem._id}`} className="hover:text-primary">
-                      {problem.title}
+                    <NavLink to={`/problem/${problem.slug || problem._id}`} className="hover:text-primary">
+                      {problem.problemNumber ? `#${problem.problemNumber}. ` : ''}{problem.title}
                     </NavLink>
                   </h2>
                   {solvedProblems.some(sp => sp._id === problem._id) && (
@@ -133,13 +135,15 @@ function Homepage() {
                   )}
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   <div className={`badge ${getDifficultyBadgeColor(problem.difficulty)}`}>
                     {problem.difficulty}
                   </div>
-                  <div className="badge badge-info">
-                    {problem.tags}
-                  </div>
+                  {normalizeTags(problem.tags).map((t) => (
+                    <div key={t} className="badge badge-info">
+                      {tagLabel(t)}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

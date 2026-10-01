@@ -5,6 +5,7 @@ import axiosClient, { getApiErrorMessage } from "../utils/axiosClient"
 import SubmissionHistory from "../components/SubmissionHistory"
 import ChatAi from '../components/ChatAi';
 import Editorial from '../components/Editorial';
+import { normalizeTags, tagLabel } from '../utils/tags';
 
 const langMap = {
         cpp: 'C++',
@@ -32,9 +33,11 @@ const ProblemPage = () => {
     const fetchProblem = async () => {
       setLoading(true);
       try {
-        
-        const response = await axiosClient.get(`/problem/problemById/${problemId}`);
-       
+        const isObjectId = /^[0-9a-fA-F]{24}$/.test(problemId);
+        const endpoint = isObjectId
+          ? `/problem/problemById/${problemId}`
+          : `/problem/bySlug/${problemId}`;
+        const response = await axiosClient.get(endpoint);
         
         const initialCode = response.data.startCode?.find(sc => sc.language?.toLowerCase() === langMap[selectedLanguage]?.toLowerCase())?.initialCode || '';
 
@@ -75,9 +78,10 @@ const ProblemPage = () => {
   const handleRun = async () => {
     setLoading(true);
     setRunResult(null);
+    const targetId = problem?._id || problemId;
     
     try {
-      const response = await axiosClient.post(`/submission/run/${problemId}`, {
+      const response = await axiosClient.post(`/submission/run/${targetId}`, {
         code,
         language: selectedLanguage
       });
@@ -100,9 +104,10 @@ const ProblemPage = () => {
   const handleSubmitCode = async () => {
     setLoading(true);
     setSubmitResult(null);
+    const targetId = problem?._id || problemId;
     
     try {
-        const response = await axiosClient.post(`/submission/submit/${problemId}`, {
+        const response = await axiosClient.post(`/submission/submit/${targetId}`, {
         code:code,
         language: selectedLanguage
       });
@@ -196,12 +201,16 @@ const ProblemPage = () => {
             <>
               {activeLeftTab === 'description' && (
                 <div>
-                  <div className="flex items-center gap-4 mb-6">
-                    <h1 className="text-2xl font-bold">{problem.title}</h1>
+                  <div className="flex flex-wrap items-center gap-3 mb-6">
+                    <h1 className="text-2xl font-bold">
+                      {problem.problemNumber ? `${problem.problemNumber}. ` : ''}{problem.title}
+                    </h1>
                     <div className={`badge badge-outline ${getDifficultyColor(problem.difficulty)}`}>
                       {problem.difficulty.charAt(0).toUpperCase() + problem.difficulty.slice(1)}
                     </div>
-                    <div className="badge badge-primary">{problem.tags}</div>
+                    {normalizeTags(problem.tags).map((t) => (
+                      <div key={t} className="badge badge-primary">{tagLabel(t)}</div>
+                    ))}
                   </div>
 
                   <div className="prose max-w-none">
@@ -224,6 +233,21 @@ const ProblemPage = () => {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  {problem.constraints && problem.constraints.length > 0 && (
+                    <div className="mt-8">
+                      <h3 className="text-lg font-semibold mb-3">Constraints:</h3>
+                      <ul className="list-disc list-inside space-y-1 text-sm font-mono text-base-content/80">
+                        {problem.constraints.map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="mt-6 pt-4 border-t border-base-300 text-xs text-base-content/60">
+                    Time limit: {problem.timeLimit || 2}s &nbsp;|&nbsp; Memory limit: {problem.memoryLimit || 256} MB
                   </div>
                 </div>
               )}
@@ -270,7 +294,7 @@ const ProblemPage = () => {
                 <div>
                   <h2 className="text-xl font-bold mb-4">My Submissions</h2>
                   <div className="text-gray-500">
-                    <SubmissionHistory problemId={problemId} />
+                    <SubmissionHistory problemId={problem?._id || problemId} />
                   </div>
                 </div>
               )}

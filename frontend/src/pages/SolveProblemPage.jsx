@@ -41,6 +41,7 @@ import ChatAi from '../components/ChatAi';
 import Editorial from '../components/Editorial';
 import ProfileDropdown from '../components/profile/ProfileDropdown';
 import AuthPromptModal from '../components/AuthPromptModal';
+import { normalizeTags, tagLabel } from '../utils/tags';
 
 /**
  * Fallback Default Problem Specification (LeetCode #1614: Maximum Nesting Depth of the Parentheses)
@@ -449,17 +450,28 @@ function SolveProblemPage() {
           return;
         }
 
-        const response = await axiosClient.get(`/problem/problemById/${problemId}`);
+        const isObjectId = /^[0-9a-fA-F]{24}$/.test(problemId);
+        const endpoint = isObjectId
+          ? `/problem/problemById/${problemId}`
+          : `/problem/bySlug/${problemId}`;
+
+        const response = await axiosClient.get(endpoint);
         if (!isMounted) return;
 
         if (response.data) {
           const apiProblem = response.data;
+          const cleanTags = normalizeTags(apiProblem.tags);
           const formattedProblem = {
             ...DEFAULT_PROBLEM,
             ...apiProblem,
-            topics: apiProblem.tags
-              ? apiProblem.tags.split(',').map((t) => t.trim())
-              : ['Algorithms', 'Data Structures'],
+            _id: apiProblem._id,
+            problemNumber: apiProblem.problemNumber,
+            slug: apiProblem.slug,
+            constraints: apiProblem.constraints || [],
+            timeLimit: apiProblem.timeLimit || 2,
+            memoryLimit: apiProblem.memoryLimit || 256,
+            tags: cleanTags,
+            topics: cleanTags.length > 0 ? cleanTags.map(tagLabel) : ['Algorithms', 'Data Structures'],
             companies: apiProblem.companies || ['Amazon', 'Google', 'Microsoft', 'Bloomberg'],
             hint:
               apiProblem.hint ||
@@ -467,6 +479,18 @@ function SolveProblemPage() {
           };
           setProblem(formattedProblem);
           loadStarterCode(formattedProblem, selectedLang);
+
+          // Check if user solved this problem
+          try {
+            const { data } = await axiosClient.get('/problem/problemSolvedByUser');
+            if (isMounted && Array.isArray(data)) {
+              const solved = data.some((sp) => sp._id === apiProblem._id);
+              setIsSolved(solved);
+              setStreakCount(data.length > 0 ? 1 : 0);
+            }
+          } catch {
+            // guest or unauthenticated
+          }
         } else {
           setProblem(DEFAULT_PROBLEM);
           loadStarterCode(DEFAULT_PROBLEM, selectedLang);
@@ -485,21 +509,6 @@ function SolveProblemPage() {
     };
 
     fetchProblem();
-
-    // Check if user solved this problem
-    const checkSolved = async () => {
-      try {
-        const { data } = await axiosClient.get('/problem/problemSolvedByUser');
-        if (isMounted && Array.isArray(data)) {
-          const solved = data.some((sp) => sp._id === problemId);
-          setIsSolved(solved);
-          setStreakCount(data.length > 0 ? 1 : 0);
-        }
-      } catch {
-        // guest or unauthenticated
-      }
-    };
-    checkSolved();
 
     return () => {
       isMounted = false;
@@ -595,8 +604,9 @@ function SolveProblemPage() {
     setConsoleTab('result');
 
     try {
-      if (problemId && problemId !== 'default-1614') {
-        const response = await axiosClient.post(`/submission/run/${problemId}`, {
+      const targetProblemId = problem?._id || problemId;
+      if (targetProblemId && targetProblemId !== 'default-1614') {
+        const response = await axiosClient.post(`/submission/run/${targetProblemId}`, {
           code,
           language: selectedLang,
         });
@@ -676,8 +686,9 @@ function SolveProblemPage() {
     setConsoleTab('result');
 
     try {
-      if (problemId && problemId !== 'default-1614') {
-        const response = await axiosClient.post(`/submission/submit/${problemId}`, {
+      const targetProblemId = problem?._id || problemId;
+      if (targetProblemId && targetProblemId !== 'default-1614') {
+        const response = await axiosClient.post(`/submission/submit/${targetProblemId}`, {
           code,
           language: selectedLang,
         });
@@ -894,7 +905,7 @@ function SolveProblemPage() {
                 {/* Problem Title & Status Badge */}
                 <div className="flex items-start justify-between gap-4">
                   <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                    {problem.title}
+                    {problem.problemNumber ? `${problem.problemNumber}. ` : ''}{problem.title}
                   </h1>
                   {isSolved ? (
                     <span className="shrink-0 px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-xs font-semibold flex items-center gap-1">
@@ -957,6 +968,20 @@ function SolveProblemPage() {
                     <span>Hint</span>
                   </button>
                 </div>
+
+                {/* Always-visible Tag Chips */}
+                {normalizeTags(problem.tags || problem.topics).length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    {normalizeTags(problem.tags || problem.topics).map((t) => (
+                      <span
+                        key={t}
+                        className="px-2.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md text-xs font-semibold"
+                      >
+                        {tagLabel(t)}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {/* Topics Tag List */}
                 {showTopics && (
@@ -1037,7 +1062,7 @@ function SolveProblemPage() {
                 </div>
 
                 {/* Constraints Section */}
-                {problem.constraints && (
+                {Array.isArray(problem.constraints) && problem.constraints.length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-zinc-800/80">
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider">
                       Constraints:
@@ -1049,6 +1074,13 @@ function SolveProblemPage() {
                     </ul>
                   </div>
                 )}
+
+                {/* Per-problem Time and Memory Limits */}
+                <div className="text-[11px] font-mono text-zinc-500 pt-2 border-t border-zinc-800/60 flex items-center gap-3">
+                  <span>Time limit: {problem.timeLimit || 2}s</span>
+                  <span>|</span>
+                  <span>Memory: {problem.memoryLimit || 256} MB</span>
+                </div>
               </div>
             )}
 

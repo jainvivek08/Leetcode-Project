@@ -13,6 +13,7 @@ node_modules/
 # Local data & database exports
 DataPart/
 datapart/
+backend/scripts/backups/
 
 # Build outputs
 dist/

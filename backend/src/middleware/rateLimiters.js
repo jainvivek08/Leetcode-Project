@@ -16,8 +16,33 @@ const RUN_MAX = 20;
 const AI_CHAT_WINDOW_MS = 60 * 1000; // 1 minute
 const AI_CHAT_MAX = 10;
 
-const GENERAL_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const GENERAL_MAX = 300;
+const getGeneralLimitMax = () => {
+  const envVal = parseInt(process.env.GENERAL_RATE_LIMIT_MAX, 10);
+  if (!isNaN(envVal) && envVal > 0) return envVal;
+  return process.env.NODE_ENV === 'production' ? 300 : 3000;
+};
+
+const getGeneralLimitWindowMs = () => {
+  const envVal = parseInt(process.env.GENERAL_RATE_LIMIT_WINDOW_MINUTES, 10);
+  const minutes = (!isNaN(envVal) && envVal > 0) ? envVal : 15;
+  return minutes * 60 * 1000;
+};
+
+const isSkippedGeneralRoute = (req) => {
+  if (req.method !== 'GET') return false;
+  const rawPath = req.originalUrl
+    ? req.originalUrl.split('?')[0].replace(/\/+$/, '')
+    : (req.path || '').replace(/\/+$/, '');
+  const skippedPaths = [
+    '/user/check',
+    '/problem/getAllProblem',
+    '/problem/list',
+    '/problem/tags',
+    '/problem/problemSolvedByUser',
+    '/user/getRank',
+  ];
+  return skippedPaths.includes(rawPath);
+};
 
 /**
  * Standard 429 response handler returning JSON with message and retryAfterSeconds.
@@ -41,14 +66,6 @@ const createLimitHandler = (defaultMessage) => {
   };
 };
 
-/**
- * Helper to construct rate limiters with standard headers.
- * 
- * Note on Store Strategy:
- * Currently using MemoryStore. In production or multi-instance deployments, a Redis store
- * can be plugged in by installing `rate-limit-redis` and passing:
- * store: new RedisStore({ sendCommand: (...args) => redisClient.sendCommand(args) })
- */
 const buildLimiter = (options) => {
   return rateLimit({
     standardHeaders: true,
@@ -119,10 +136,12 @@ const aiChatLimiter = buildLimiter({
   }
 });
 
-// 6. General limiter: 300 requests / 15 min per IP.
+// 6. General limiter: configurable via env, skips frequent read routes.
+// Default: 300 in production, 3000 in development per 15 min per IP.
 const generalLimiter = buildLimiter({
-  windowMs: GENERAL_WINDOW_MS,
-  limit: GENERAL_MAX,
+  windowMs: getGeneralLimitWindowMs(),
+  limit: (req, res) => getGeneralLimitMax(),
+  skip: (req) => isSkippedGeneralRoute(req),
   message: "Too many requests from this IP. Please try again later.",
   keyGenerator: (req) => ipKeyGenerator(req.ip)
 });

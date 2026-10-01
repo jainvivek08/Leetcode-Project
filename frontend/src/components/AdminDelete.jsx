@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axiosClient, { getApiErrorMessage } from '../utils/axiosClient';
+import { normalizeTags, tagLabel } from '../utils/tags';
 
 const AdminDelete = () => {
   const [problems, setProblems] = useState([]);
@@ -91,13 +92,13 @@ const AdminDelete = () => {
           <tbody>
             {problems.map((problem, index) => (
               <tr key={problem._id}>
-                <th>{index + 1}</th>
+                <th>{problem.problemNumber != null ? `#${problem.problemNumber}` : index + 1}</th>
                 <td>{problem.title}</td>
                 <td>
                   <span className={`badge ${
-                    problem.difficulty === 'Easy' 
+                    problem.difficulty?.toLowerCase() === 'easy' 
                       ? 'badge-success' 
-                      : problem.difficulty === 'Medium' 
+                      : problem.difficulty?.toLowerCase() === 'medium' 
                         ? 'badge-warning' 
                         : 'badge-error'
                   }`}>
@@ -105,9 +106,13 @@ const AdminDelete = () => {
                   </span>
                 </td>
                 <td>
-                  <span className="badge badge-outline">
-                    {problem.tags}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {normalizeTags(problem.tags).map((t) => (
+                      <span key={t} className="badge badge-outline badge-xs">
+                        {tagLabel(t)}
+                      </span>
+                    ))}
+                  </div>
                 </td>
                 <td>
                   <div className="flex space-x-2">

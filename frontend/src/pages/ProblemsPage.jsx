@@ -20,6 +20,10 @@ import {
 import axiosClient from '../utils/axiosClient';
 import ProfileDropdown from '../components/profile/ProfileDropdown';
 import { logoutUser } from '../authSlice';
+import { normalizeTags, tagLabel } from '../utils/tags';
+
+// Audit configuration: hide hardcoded/mock company badges & filter
+const SHOW_MOCK_COMPANY_TAGS = false;
 
 /**
  * Base Problem Metadata for the user's real MongoDB questions
@@ -300,6 +304,7 @@ function ProblemsPage() {
 
   // Live problems & Solved state from MongoDB API
   const [liveProblems, setLiveProblems] = useState(BASE_PROBLEMS_DATA);
+  const [availableTags, setAvailableTags] = useState([]);
   const [solvedIds, setSolvedIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -307,6 +312,21 @@ function ProblemsPage() {
   const [totalProblems, setTotalProblems] = useState(BASE_PROBLEMS_DATA.length);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const reqIdRef = useRef(0);
+
+  // Fetch real tag list with counts from backend
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const { data } = await axiosClient.get('/problem/tags');
+        if (Array.isArray(data)) {
+          setAvailableTags(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch tags from /problem/tags:', err);
+      }
+    };
+    fetchTags();
+  }, []);
 
   // Accordion state:
   // Level 1: Topic expanded (default: Mathematics and Arrays open)
@@ -356,10 +376,15 @@ function ProblemsPage() {
     const fetchProblems = async () => {
       try {
         setLoading(true);
+        let sortParam = 'newest';
+        if (selectedSort === 'alpha') sortParam = 'title';
+        else if (selectedSort === 'number') sortParam = 'number';
+        else if (selectedSort === 'oldest') sortParam = 'oldest';
+
         const params = {
           page,
           limit: 20,
-          sort: selectedSort === 'alpha' ? 'title' : 'newest',
+          sort: sortParam,
         };
 
         if (debouncedSearch.trim()) {
@@ -371,7 +396,7 @@ function ProblemsPage() {
         }
 
         if (selectedTopic !== 'All') {
-          params.tag = TOPIC_TO_TAG_MAP[selectedTopic] || selectedTopic.toLowerCase();
+          params.tag = selectedTopic;
         }
 
         const { data } = await axiosClient.get('/problem/list', { params });
@@ -388,19 +413,21 @@ function ProblemsPage() {
                   apiP.title?.toLowerCase().trim()
             );
 
+            const cleanTags = normalizeTags(apiP.tags);
             let topicName = 'Arrays';
-            if (foundMeta?.topic) {
+            if (cleanTags.length > 0) {
+              topicName = tagLabel(cleanTags[0]);
+            } else if (foundMeta?.topic) {
               topicName = foundMeta.topic;
-            } else if (apiP.tags) {
-              const primaryTag = String(apiP.tags).split(',')[0].toLowerCase().trim();
-              topicName = TOPIC_TAG_MAP[primaryTag] || 'Arrays';
             }
 
             return {
               _id: apiP._id,
               title: apiP.title,
               difficulty: (apiP.difficulty || 'easy').toLowerCase(),
-              tags: apiP.tags || 'general',
+              tags: cleanTags,
+              problemNumber: apiP.problemNumber,
+              slug: apiP.slug,
               topic: topicName,
               secondaryTopic: foundMeta?.secondaryTopic,
               companies: foundMeta?.companies || ['Amazon', 'Microsoft'],
@@ -504,9 +531,9 @@ function ProblemsPage() {
     }));
   };
 
-  // Navigate to problem compiler arena with real MongoDB ID
+  // Navigate to problem compiler arena with slug preference
   const handleProblemClick = (problem) => {
-    navigate(`/problem/${problem._id}`);
+    navigate(`/problem/${problem.slug || problem._id}`);
   };
 
   // Group problems into 3-level hierarchy (Topic -> Difficulty -> Problems)
@@ -832,7 +859,7 @@ function ProblemsPage() {
                 </button>
 
                 {openDropdown === 'topic' && (
-                  <div className="absolute top-full mt-1.5 left-0 z-30 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
+                  <div className="absolute top-full mt-1.5 left-0 z-30 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => {
@@ -847,25 +874,24 @@ function ProblemsPage() {
                         <Check className="w-3.5 h-3.5 text-blue-600" />
                       )}
                     </button>
-                    {TOPIC_ORDER.map((tName) => (
+                    {availableTags.map((item) => (
                       <button
-                        key={tName}
+                        key={item.tag}
                         type="button"
                         onClick={() => {
-                          setSelectedTopic(tName);
-                          setExpandedTopics((prev) => ({
-                            ...prev,
-                            [tName]: true,
-                          }));
+                          setSelectedTopic(item.tag);
                           setOpenDropdown(null);
-                          triggerToast(`Topic: ${tName}`, '📁');
+                          triggerToast(`Topic: ${tagLabel(item.tag)}`, '📁');
                         }}
                         className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
                       >
-                        <span>{tName}</span>
-                        {selectedTopic === tName && (
-                          <Check className="w-3.5 h-3.5 text-blue-600" />
-                        )}
+                        <span>{tagLabel(item.tag)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 font-mono">({item.count})</span>
+                          {selectedTopic === item.tag && (
+                            <Check className="w-3.5 h-3.5 text-blue-600" />
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -922,53 +948,55 @@ function ProblemsPage() {
                 )}
               </div>
 
-              {/* 4. Company Dropdown */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setOpenDropdown(openDropdown === 'comp' ? null : 'comp')
-                  }
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
-                    selectedCompany !== 'All'
-                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>
-                    {selectedCompany === 'All' ? 'Company' : selectedCompany}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                </button>
+              {/* 4. Company Dropdown (Hidden if SHOW_MOCK_COMPANY_TAGS is false) */}
+              {SHOW_MOCK_COMPANY_TAGS && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenDropdown(openDropdown === 'comp' ? null : 'comp')
+                    }
+                    className={`inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+                      selectedCompany !== 'All'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                    }`}
+                  >
+                    <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                    <span>
+                      {selectedCompany === 'All' ? 'Company' : selectedCompany}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
 
-                {openDropdown === 'comp' && (
-                  <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
-                    {availableCompanies.map((comp) => (
-                      <button
-                        key={comp}
-                        type="button"
-                        onClick={() => {
-                          setSelectedCompany(comp);
-                          setOpenDropdown(null);
-                          triggerToast(
-                            comp === 'All'
-                              ? 'Showing all companies'
-                              : `Filtered by ${comp}`,
-                            '🏢'
-                          );
-                        }}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
-                      >
-                        <span>{comp === 'All' ? 'All Companies' : comp}</span>
-                        {selectedCompany === comp && (
-                          <Check className="w-3.5 h-3.5 text-blue-600" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  {openDropdown === 'comp' && (
+                    <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
+                      {availableCompanies.map((comp) => (
+                        <button
+                          key={comp}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCompany(comp);
+                            setOpenDropdown(null);
+                            triggerToast(
+                              comp === 'All'
+                                ? 'Showing all companies'
+                                : `Filtered by ${comp}`,
+                              '🏢'
+                            );
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                        >
+                          <span>{comp === 'All' ? 'All Companies' : comp}</span>
+                          {selectedCompany === comp && (
+                            <Check className="w-3.5 h-3.5 text-blue-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* 5. Sort Dropdown (With Green Indicator Dot) */}
               <div className="relative">
@@ -988,11 +1016,12 @@ function ProblemsPage() {
                 {openDropdown === 'sort' && (
                   <div className="absolute top-full mt-1.5 right-0 z-30 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
                     {[
-                      { id: 'default', label: 'Default Order' },
+                      { id: 'default', label: 'Default (Newest)' },
+                      { id: 'number', label: 'Problem Number (#1..N)' },
+                      { id: 'alpha', label: 'Problem Title (A-Z)' },
                       { id: 'acc-high', label: 'Accuracy: High to Low' },
                       { id: 'acc-low', label: 'Accuracy: Low to High' },
                       { id: 'sub-high', label: 'Most Submissions' },
-                      { id: 'alpha', label: 'Problem Title (A-Z)' },
                     ].map((s) => (
                       <button
                         key={s.id}
@@ -1045,7 +1074,7 @@ function ProblemsPage() {
             <div className="hidden sm:grid grid-cols-12 px-6 py-3 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold tracking-wider text-slate-500 dark:text-slate-400 uppercase select-none">
               <div className="col-span-1">STATUS</div>
               <div className="col-span-5">PROBLEM</div>
-              <div className="col-span-3">COMPANIES</div>
+              <div className="col-span-3">{SHOW_MOCK_COMPANY_TAGS ? 'COMPANIES' : 'TAGS'}</div>
               <div className="col-span-2 text-right">SUBMISSIONS</div>
               <div className="col-span-1 text-right">ACCURACY</div>
             </div>
@@ -1190,19 +1219,37 @@ function ProblemsPage() {
 
                                             {/* Problem Title */}
                                             <div className="col-span-5 font-semibold text-xs sm:text-sm text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition pr-2 truncate">
-                                              {problem.title}
+                                              {problem.problemNumber != null ? `#${problem.problemNumber}. ` : ''}{problem.title}
                                             </div>
 
                                             {/* Companies */}
-                                            <div className="col-span-3 flex flex-wrap gap-1">
-                                              {problem.companies.map((comp) => (
-                                                <span
-                                                  key={comp}
-                                                  className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-400"
-                                                >
-                                                  {comp}
-                                                </span>
-                                              ))}
+                                            <div className="col-span-3 flex flex-wrap gap-1 items-center">
+                                              {SHOW_MOCK_COMPANY_TAGS ? (
+                                                problem.companies.map((comp) => (
+                                                  <span
+                                                    key={comp}
+                                                    className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-400"
+                                                  >
+                                                    {comp}
+                                                  </span>
+                                                ))
+                                              ) : (
+                                                <>
+                                                  {normalizeTags(problem.tags).slice(0, 3).map((tag) => (
+                                                    <span
+                                                      key={tag}
+                                                      className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 rounded-md text-[10px] font-semibold"
+                                                    >
+                                                      {tagLabel(tag)}
+                                                    </span>
+                                                  ))}
+                                                  {normalizeTags(problem.tags).length > 3 && (
+                                                    <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md text-[9px] font-bold">
+                                                      +{normalizeTags(problem.tags).length - 3}
+                                                    </span>
+                                                  )}
+                                                </>
+                                              )}
                                             </div>
 
                                             {/* Submissions */}

@@ -16,9 +16,14 @@ axiosClient.interceptors.response.use(
     (error) => {
         if (error.response && error.response.status === 401) {
             const requestUrl = error.config?.url || '';
-            // Do not trigger global auth:expired event for credentials failures on login or register
-            const isAuthAttempt = requestUrl.includes('/user/login') || requestUrl.includes('/user/register');
-            if (!isAuthAttempt && typeof window !== 'undefined') {
+            // Do not trigger global auth:expired event for credentials failures on login/register,
+            // nor for routine unauthenticated session checks or logout calls
+            const isAuthOrSessionCheck = 
+                requestUrl.includes('/user/login') || 
+                requestUrl.includes('/user/register') ||
+                requestUrl.includes('/user/check') ||
+                requestUrl.includes('/user/logout');
+            if (!isAuthOrSessionCheck && typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('auth:expired', { detail: error.response?.data }));
             }
         }

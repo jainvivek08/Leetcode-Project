@@ -25,14 +25,26 @@ const cors = require('cors');
 const { generalLimiter } = require('./middleware/rateLimiters');
 const Submission = require('./models/submission');
 
-const clientOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
+const clientOrigin = process.env.CLIENT_URL;
+const allowedOrigins = [
+    clientOrigin,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174'
+].filter(Boolean);
 
 app.use(cors({
-    origin: clientOrigin,
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(null, false);
+    },
     credentials: true 
 }));
 
-// Global general rate limiter (300 requests / 15 min per IP)
+// Global general rate limiter (configurable via GENERAL_RATE_LIMIT_MAX / GENERAL_RATE_LIMIT_WINDOW_MINUTES, skips frequent read routes)
 app.use(generalLimiter);
 
 // Global body parser: 1mb for general routes, deferred to route-level 10mb for /user/updateProfile

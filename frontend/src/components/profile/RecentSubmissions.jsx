@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router';
 import { ChevronRight, Code2, Sparkles, ExternalLink } from 'lucide-react';
+import { normalizeTags, tagLabel } from '../../utils/tags';
 
 function RecentSubmissions({ submissions = [], onSubmissionClick, onToast }) {
   const [activeTab, setActiveTab] = useState('ac'); // 'ac' | 'all'
@@ -86,48 +87,53 @@ function RecentSubmissions({ submissions = [], onSubmissionClick, onToast }) {
       ) : (
         /* Problem List Rows */
         <div className="divide-y divide-slate-100 text-xs">
-          {list.map((item, idx) => (
-            <div
-              key={item._id || item.id || idx}
-              onClick={() => onSubmissionClick && onSubmissionClick(item)}
-              className="py-3 flex items-center justify-between hover:bg-slate-50/80 px-2 rounded-xl transition cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-emerald-500 font-bold text-sm shrink-0">✔</span>
+          {list.map((item, idx) => {
+            const tags = normalizeTags(item.tags);
+            const targetLink = `/problem/${item.slug || item.problemId || item._id || item.id}`;
+            const num = item.problemNumber || item.number;
+            return (
+              <div
+                key={item._id || item.id || idx}
+                onClick={() => onSubmissionClick && onSubmissionClick(item)}
+                className="py-3 flex items-center justify-between hover:bg-slate-50/80 px-2 rounded-xl transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-emerald-500 font-bold text-sm shrink-0">✔</span>
 
-                <div>
-                  <Link
-                    to={`/problem/${item._id || item.id}`}
-                    className="font-bold text-slate-800 group-hover:text-blue-600 transition inline-flex items-center gap-1"
+                  <div>
+                    <Link
+                      to={targetLink}
+                      className="font-bold text-slate-800 group-hover:text-blue-600 transition inline-flex items-center gap-1"
+                    >
+                      <span>{num ? `${num}. ` : ''}{item.title}</span>
+                      <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </Link>
+                    <span className="text-[10px] text-slate-400 font-mono block">
+                      {item.detail || (tags.length > 0 ? `Tags: ${tags.map(tagLabel).join(', ')}` : 'Solved in CodeQuest Arena')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${getDifficultyBadge(
+                      item.difficulty
+                    )}`}
                   >
-                    <span>{item.number ? `${item.number}. ` : ''}{item.title}</span>
-                    <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </Link>
-                  <span className="text-[10px] text-slate-400 font-mono block">
-                    {item.detail || (item.tags ? `Tag: ${item.tags}` : 'Solved in CodeQuest Arena')}
+                    {item.difficulty || 'Easy'}
+                  </span>
+                  {tags.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-[10px] hidden sm:inline">
+                      {tags.map(tagLabel).join(', ')}
+                    </span>
+                  )}
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    {item.timestamp || 'Solved'}
                   </span>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2.5">
-                <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${getDifficultyBadge(
-                    item.difficulty
-                  )}`}
-                >
-                  {item.difficulty || 'Easy'}
-                </span>
-                {item.tags && (
-                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-[10px] hidden sm:inline">
-                    {item.tags}
-                  </span>
-                )}
-                <span className="text-[11px] text-slate-400 font-mono">
-                  {item.timestamp || 'Solved'}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
