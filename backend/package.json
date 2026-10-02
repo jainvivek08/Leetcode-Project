@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
+    "test": "node --test tests/**/*.test.js",
     "export-compass": "node scripts/export_compass_data.js",
     "seed-compass": "node scripts/seed_compass_data.js",
     "cleanup-orphans": "node scripts/cleanup_orphans.js"

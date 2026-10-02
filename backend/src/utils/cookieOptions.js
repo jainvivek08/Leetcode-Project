@@ -5,21 +5,31 @@ const getJwtExpiresInSeconds = () => {
 
 const getCookieOptions = (overrides = {}) => {
   const isProduction = process.env.NODE_ENV === 'production';
-  const rawSameSite = (process.env.COOKIE_SAMESITE || 'lax').toLowerCase().trim();
-  const allowedSameSite = ['lax', 'strict', 'none'];
-  const sameSite = allowedSameSite.includes(rawSameSite) ? rawSameSite : 'lax';
-
-  // If COOKIE_SAMESITE=none then force secure=true (required by browser spec)
-  const secure = sameSite === 'none' ? true : isProduction;
+  const sameSite = isProduction ? 'none' : 'lax';
+  const secure = isProduction;
 
   return {
     httpOnly: true,
     secure,
     sameSite,
-    maxAge: getJwtExpiresInSeconds() * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
     ...overrides
   };
 };
 
-module.exports = { getCookieOptions, getJwtExpiresInSeconds };
+const getClearCookieOptions = (overrides = {}) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const sameSite = isProduction ? 'none' : 'lax';
+  const secure = isProduction;
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    ...overrides
+  };
+};
+
+module.exports = { getCookieOptions, getClearCookieOptions, getJwtExpiresInSeconds };
+
 

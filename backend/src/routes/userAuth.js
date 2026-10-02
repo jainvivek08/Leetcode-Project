@@ -1,14 +1,14 @@
 const express = require('express');
 
 const authRouter =  express.Router();
-const {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank} = require('../controllers/userAuthent')
+const {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank, getActivityHeatmap} = require('../controllers/userAuthent')
 const userMiddleware = require("../middleware/userMiddleware");
 const adminMiddleware = require('../middleware/adminMiddleware');
-const { loginLimiter, registerLimiter } = require('../middleware/rateLimiters');
+const { authLimiter } = require('../middleware/rateLimiters');
 
 // Register & Login
-authRouter.post('/register', registerLimiter, register);
-authRouter.post('/login', loginLimiter, login);
+authRouter.post('/register', authLimiter, register);
+authRouter.post('/login', authLimiter, login);
 authRouter.post('/logout', userMiddleware, logout);
 authRouter.post('/admin/register', adminMiddleware, adminRegister);
 authRouter.delete('/deleteProfile', userMiddleware, deleteProfile);
@@ -17,6 +17,8 @@ authRouter.delete('/deleteProfile', userMiddleware, deleteProfile);
 authRouter.get('/getProfile', userMiddleware, getProfile);
 authRouter.put('/updateProfile', userMiddleware, express.json({ limit: '10mb' }), updateProfile);
 authRouter.get('/getRank', userMiddleware, getUserRank);
+authRouter.get('/getUserRank', userMiddleware, getUserRank);
+authRouter.get('/activity-heatmap', userMiddleware, getActivityHeatmap);
 
 authRouter.get('/check', userMiddleware, (req, res) => {
     const reply = {

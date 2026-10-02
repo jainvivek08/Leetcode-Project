@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Flame } from 'lucide-react';
+import axiosClient from '../../utils/axiosClient';
 
 /**
  * ActivityHeatmap Component
@@ -8,13 +9,79 @@ import { Flame } from 'lucide-react';
  * Seamlessly aligns 12 months with their exact 52-week grid columns.
  */
 function ActivityHeatmap({
-  totalSubmissions = 0,
-  currentStreak = 0,
-  maxStreak = 0,
+  totalSubmissions,
+  currentStreak: propCurrentStreak,
+  maxStreak: propMaxStreak,
+  totalActiveDays: propTotalActiveDays,
+  activityMap: propActivityMap,
   submissions = [],
   onDayClick,
 }) {
   const [hoveredDay, setHoveredDay] = useState(null);
+  const [apiHeatmap, setApiHeatmap] = useState(null);
+
+  // If activityMap is not provided via props, fetch from /user/activity-heatmap
+  useEffect(() => {
+    if (propActivityMap !== undefined) return;
+
+    let isMounted = true;
+    const fetchHeatmap = async () => {
+      try {
+        const { data } = await axiosClient.get('/user/activity-heatmap');
+        if (isMounted && data?.success) {
+          setApiHeatmap(data);
+        }
+      } catch (err) {
+        console.warn('Could not fetch activity heatmap in ActivityHeatmap component:', err);
+      }
+    };
+
+    fetchHeatmap();
+    return () => {
+      isMounted = false;
+    };
+  }, [propActivityMap]);
+
+  // Resolve data source (props take precedence, then apiHeatmap, then safe defaults)
+  const resolvedActivityMap = useMemo(() => {
+    if (propActivityMap && typeof propActivityMap === 'object') {
+      return propActivityMap;
+    }
+    if (apiHeatmap?.activityMap && typeof apiHeatmap.activityMap === 'object') {
+      return apiHeatmap.activityMap;
+    }
+    return {};
+  }, [propActivityMap, apiHeatmap]);
+
+  const currentStreak = Number(
+    propCurrentStreak !== undefined
+      ? propCurrentStreak
+      : apiHeatmap?.currentStreak ?? 0
+  ) || 0;
+
+  const maxStreak = Number(
+    propMaxStreak !== undefined
+      ? propMaxStreak
+      : apiHeatmap?.maxStreak ?? 0
+  ) || 0;
+
+  const totalActiveDays = Number(
+    propTotalActiveDays !== undefined
+      ? propTotalActiveDays
+      : apiHeatmap?.totalActiveDays ?? Object.keys(resolvedActivityMap).length
+  ) || 0;
+
+  // Calculate total submissions in the past year
+  const totalSubmissionsInPastYear = useMemo(() => {
+    const mapValues = Object.values(resolvedActivityMap);
+    if (mapValues.length > 0) {
+      return mapValues.reduce((acc, c) => acc + (Number(c) || 0), 0);
+    }
+    if (typeof totalSubmissions === 'number' && !isNaN(totalSubmissions)) {
+      return totalSubmissions;
+    }
+    return 0;
+  }, [resolvedActivityMap, totalSubmissions]);
 
   // Helper date key: YYYY-MM-DD
   const formatDateKey = (d) => {
@@ -40,10 +107,10 @@ function ActivityHeatmap({
     today.setHours(0, 0, 0, 0);
 
     // Map of date string (YYYY-MM-DD) -> submission count
-    const dateCounts = {};
+    const dateCounts = { ...resolvedActivityMap };
 
-    // 1. Populate from actual submission records if timestamps exist
-    if (Array.isArray(submissions) && submissions.length > 0) {
+    // Fallback: populate from actual submission objects if activityMap was empty
+    if (Object.keys(dateCounts).length === 0 && Array.isArray(submissions) && submissions.length > 0) {
       submissions.forEach((s) => {
         const rawDate = s.createdAt || s.updatedAt || s.date;
         if (rawDate) {
@@ -53,27 +120,7 @@ function ActivityHeatmap({
       });
     }
 
-    // 2. If no timestamps but totalSubmissions > 0, attribute to today & active streak days
-    if (Object.keys(dateCounts).length === 0 && totalSubmissions > 0) {
-      const todayKey = formatDateKey(today);
-      const activeStreak = Math.max(currentStreak || 1, 1);
-
-      // Give today at least 1 submission
-      dateCounts[todayKey] = Math.max(1, Math.min(totalSubmissions, 2));
-      let remaining = totalSubmissions - dateCounts[todayKey];
-
-      // Spread remaining streak days backwards
-      for (let i = 1; i < activeStreak && remaining > 0; i++) {
-        const pastDate = new Date(today);
-        pastDate.setDate(today.getDate() - i);
-        const pastKey = formatDateKey(pastDate);
-        const count = Math.min(remaining, 2);
-        dateCounts[pastKey] = count;
-        remaining -= count;
-      }
-    }
-
-    // 3. Calculate start Sunday: 51 weeks before current week's Sunday
+    // Calculate start Sunday: 51 weeks before current week's Sunday
     const currentDayOfWeek = today.getDay(); // 0 is Sunday, 6 is Saturday
     const startSunday = new Date(today);
     startSunday.setDate(today.getDate() - currentDayOfWeek - 51 * 7);
@@ -105,7 +152,7 @@ function ActivityHeatmap({
         const isToday = formatDateKey(cellDate) === formatDateKey(today);
         const isFuture = cellDate > today;
         const dateKey = formatDateKey(cellDate);
-        const count = isFuture ? 0 : dateCounts[dateKey] || 0;
+        const count = isFuture ? 0 : Number(dateCounts[dateKey]) || 0;
 
         let bgClass = 'bg-slate-200/60 hover:bg-slate-300';
         if (isFuture) {
@@ -138,7 +185,7 @@ function ActivityHeatmap({
       matrix: calculatedMatrix,
       monthMarkers: markers,
     };
-  }, [totalSubmissions, currentStreak, submissions]);
+  }, [resolvedActivityMap, submissions]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
@@ -146,7 +193,7 @@ function ActivityHeatmap({
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-100">
         <div>
           <h2 className="text-sm font-black text-slate-900 tracking-tight uppercase tracking-wider">
-            <span>{totalSubmissions}</span> Submissions in the past year
+            <span>{totalSubmissionsInPastYear}</span> Submissions in the past year
           </h2>
           <p className="text-[11px] text-slate-400">Total active problem solving cadence</p>
         </div>
@@ -170,6 +217,10 @@ function ActivityHeatmap({
           <div className="border-l border-slate-200 pl-4">
             <span className="text-slate-400 font-mono text-[10px] uppercase block">Max Streak</span>
             <span className="text-slate-700 font-bold font-mono text-sm">{maxStreak} Days</span>
+          </div>
+          <div className="border-l border-slate-200 pl-4">
+            <span className="text-slate-400 font-mono text-[10px] uppercase block">Active Days</span>
+            <span className="text-slate-700 font-bold font-mono text-sm">{totalActiveDays} Days</span>
           </div>
         </div>
       </div>
@@ -235,9 +286,9 @@ function ActivityHeatmap({
                     {hoveredDay.isFuture ? 'Upcoming day' : 'No submissions'} on {hoveredDay.dateStr}
                   </span>
                 )
-              ) : totalSubmissions > 0 ? (
+              ) : totalSubmissionsInPastYear > 0 ? (
                 <span className="text-emerald-600 font-semibold">
-                  ✔ {totalSubmissions} problem{totalSubmissions === 1 ? '' : 's'} solved in the past year • {currentStreak} Day Streak 🔥
+                  ✔ {totalSubmissionsInPastYear} problem{totalSubmissionsInPastYear === 1 ? '' : 's'} solved in the past year • {currentStreak} Day Streak 🔥 ({totalActiveDays} active days)
                 </span>
               ) : (
                 'No submissions recorded yet'

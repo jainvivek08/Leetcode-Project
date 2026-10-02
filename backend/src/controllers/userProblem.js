@@ -1,9 +1,11 @@
 const mongoose = require("mongoose");
-const { getLanguageById, normalizeLanguage, mapJudge0Status, submitBatch, submitToken } = require("../utils/problemUtility");
+const problemUtility = require("../utils/problemUtility");
+const { getLanguageById, normalizeLanguage, mapJudge0Status } = problemUtility;
 const Problem = require("../models/problem");
 const User = require("../models/user");
 const Submission = require("../models/submission");
 const SolutionVideo = require("../models/solutionVideo");
+const Discussion = require("../models/discussion");
 const { deleteCloudinaryVideo } = require("./videoSection");
 const { CANONICAL_TAGS, CANONICAL_TAGS_SET } = require("../utils/problemTags");
 const { getNextSequence } = require("../models/counter");
@@ -60,10 +62,10 @@ const verifyReferenceSolutions = async (referenceSolution, visibleTestCases, hid
 
   const extraLimits = {};
   if (typeof timeLimit === 'number') {
-    extraLimits.cpu_time_limit = timeLimit;
+    extraLimits.cpu_time_limit = timeLimit >= 100 ? timeLimit / 1000 : timeLimit;
   }
   if (typeof memoryLimit === 'number') {
-    extraLimits.memory_limit = memoryLimit * 1024;
+    extraLimits.memory_limit = memoryLimit <= 1024 ? memoryLimit * 1024 : memoryLimit;
   }
 
   for (const { language, completeCode } of referenceSolution) {
@@ -77,9 +79,13 @@ const verifyReferenceSolutions = async (referenceSolution, visibleTestCases, hid
       ...extraLimits,
     }));
 
-    const submitResult = await submitBatch(submissions);
+    const submitResult = await problemUtility.submitBatch(submissions);
     const resultToken = submitResult.map((value) => value.token);
-    const testResult = await submitToken(resultToken);
+    const testResult = await problemUtility.submitToken(resultToken);
+
+    if (testResult && !Array.isArray(testResult) && (testResult.status === 'judge_timeout' || testResult.status === 'time_limit_exceeded')) {
+      return `Reference solution for ${language} timed out waiting for judge results.`;
+    }
 
     for (let i = 0; i < testResult.length; i++) {
       const test = testResult[i];
@@ -95,6 +101,220 @@ const verifyReferenceSolutions = async (referenceSolution, visibleTestCases, hid
   }
 
   return null;
+};
+
+const CANONICAL_LANGUAGES = ['javascript', 'c++', 'java', 'python3'];
+
+const canonicalLanguageName = (lang) => {
+  const norm = normalizeLanguage(lang);
+  if (norm === 'javascript') return 'JavaScript';
+  if (norm === 'c++') return 'C++';
+  if (norm === 'java') return 'Java';
+  if (norm === 'python3') return 'Python3';
+  return lang;
+};
+
+function normalizeSolutionsForCompare(solutions) {
+  if (!Array.isArray(solutions)) return [];
+  return solutions
+    .map((s) => ({
+      language: normalizeLanguage(s.language),
+      completeCode: String(s.completeCode || '').replace(/\r\n/g, '\n').trim(),
+    }))
+    .sort((a, b) => a.language.localeCompare(b.language));
+}
+
+function normalizeVisibleCasesForCompare(cases) {
+  if (!Array.isArray(cases)) return [];
+  return cases.map((c) => ({
+    input: String(c.input || '').replace(/\r\n/g, '\n').trim(),
+    output: String(c.output || '').replace(/\r\n/g, '\n').trim(),
+    explanation: String(c.explanation || '').replace(/\r\n/g, '\n').trim(),
+  }));
+}
+
+function normalizeHiddenCasesForCompare(cases) {
+  if (!Array.isArray(cases)) return [];
+  return cases.map((c) => ({
+    input: String(c.input || '').replace(/\r\n/g, '\n').trim(),
+    output: String(c.output || '').replace(/\r\n/g, '\n').trim(),
+  }));
+}
+
+const validateProblemPayload = (data, isCreate = true, existingProblem = null) => {
+  // Title: 1-150 chars
+  if (isCreate || data.title !== undefined) {
+    if (!data.title || typeof data.title !== 'string') {
+      return { valid: false, field: 'title', message: 'Title is required and must be a string.' };
+    }
+    const trimmedTitle = data.title.trim();
+    if (trimmedTitle.length < 1 || trimmedTitle.length > 150) {
+      return { valid: false, field: 'title', message: 'Title must be between 1 and 150 characters.' };
+    }
+  }
+
+  // Description: 1-20000 chars
+  if (isCreate || data.description !== undefined) {
+    if (!data.description || typeof data.description !== 'string') {
+      return { valid: false, field: 'description', message: 'Description is required and must be a string.' };
+    }
+    const trimmedDesc = data.description.trim();
+    if (trimmedDesc.length < 1 || trimmedDesc.length > 20000) {
+      return { valid: false, field: 'description', message: 'Description must be between 1 and 20000 characters.' };
+    }
+  }
+
+  // Difficulty: enum
+  if (isCreate || data.difficulty !== undefined) {
+    if (!data.difficulty || typeof data.difficulty !== 'string') {
+      return { valid: false, field: 'difficulty', message: 'Difficulty is required.' };
+    }
+    const diff = data.difficulty.toLowerCase().trim();
+    if (!['easy', 'medium', 'hard'].includes(diff)) {
+      return { valid: false, field: 'difficulty', message: 'Difficulty must be one of: easy, medium, hard.' };
+    }
+  }
+
+  // Tags: 1-6 canonical tags
+  if (isCreate || data.tags !== undefined) {
+    const tagCheck = validateAndNormalizeTags(data.tags);
+    if (!tagCheck.valid) {
+      return { valid: false, field: 'tags', message: tagCheck.error };
+    }
+  }
+
+  // Constraints: optional markdown text or array of strings
+  if (data.constraints !== undefined && data.constraints !== null) {
+    if (typeof data.constraints !== 'string' && !Array.isArray(data.constraints)) {
+      return { valid: false, field: 'constraints', message: 'Constraints must be a string or an array of strings.' };
+    }
+  }
+
+  // TimeLimit: 100-10000 ms, or 1-10 s
+  if (data.timeLimit !== undefined) {
+    const tl = Number(data.timeLimit);
+    if (isNaN(tl) || tl < 1 || (tl > 10 && tl < 100) || tl > 10000) {
+      return { valid: false, field: 'timeLimit', message: 'Time limit must be between 100 and 10000 ms (or 1 to 10 seconds).' };
+    }
+  }
+
+  // MemoryLimit: 64-512 MB or 64000-512000 KB
+  if (data.memoryLimit !== undefined) {
+    const ml = Number(data.memoryLimit);
+    if (isNaN(ml) || ml < 64 || (ml > 512 && ml < 64000) || ml > 512000) {
+      return { valid: false, field: 'memoryLimit', message: 'Memory limit must be between 64 and 512 MB (or 64000 to 512000 KB).' };
+    }
+  }
+
+  // Visible test cases: 1..10, input/output/explanation non-empty, input/output <= 5000 chars
+  if (isCreate || data.visibleTestCases !== undefined) {
+    if (!Array.isArray(data.visibleTestCases) || data.visibleTestCases.length < 1 || data.visibleTestCases.length > 10) {
+      return { valid: false, field: 'visibleTestCases', message: 'visibleTestCases must contain between 1 and 10 test cases.' };
+    }
+    for (let i = 0; i < data.visibleTestCases.length; i++) {
+      const tc = data.visibleTestCases[i];
+      if (!tc || typeof tc !== 'object') {
+        return { valid: false, field: 'visibleTestCases', message: `visibleTestCases #${i + 1} must be an object.` };
+      }
+      if (tc.input === undefined || tc.input === null || String(tc.input).trim() === '') {
+        return { valid: false, field: 'visibleTestCases', message: `visibleTestCases #${i + 1}: input cannot be empty.` };
+      }
+      if (tc.output === undefined || tc.output === null || String(tc.output).trim() === '') {
+        return { valid: false, field: 'visibleTestCases', message: `visibleTestCases #${i + 1}: output cannot be empty.` };
+      }
+      if (tc.explanation === undefined || tc.explanation === null || String(tc.explanation).trim() === '') {
+        return { valid: false, field: 'visibleTestCases', message: `visibleTestCases #${i + 1}: explanation cannot be empty.` };
+      }
+      if (String(tc.input).length > 5000 || String(tc.output).length > 5000) {
+        return { valid: false, field: 'visibleTestCases', message: `visibleTestCases #${i + 1}: input and output cannot exceed 5000 characters.` };
+      }
+    }
+  }
+
+  // Hidden test cases: 1..50, input/output non-empty, input/output <= 5000 chars
+  if (isCreate || data.hiddenTestCases !== undefined) {
+    if (!Array.isArray(data.hiddenTestCases) || data.hiddenTestCases.length < 1 || data.hiddenTestCases.length > 50) {
+      return { valid: false, field: 'hiddenTestCases', message: 'hiddenTestCases must contain between 1 and 50 test cases.' };
+    }
+    for (let i = 0; i < data.hiddenTestCases.length; i++) {
+      const tc = data.hiddenTestCases[i];
+      if (!tc || typeof tc !== 'object') {
+        return { valid: false, field: 'hiddenTestCases', message: `hiddenTestCases #${i + 1} must be an object.` };
+      }
+      if (tc.input === undefined || tc.input === null || String(tc.input).trim() === '') {
+        return { valid: false, field: 'hiddenTestCases', message: `hiddenTestCases #${i + 1}: input cannot be empty.` };
+      }
+      if (tc.output === undefined || tc.output === null || String(tc.output).trim() === '') {
+        return { valid: false, field: 'hiddenTestCases', message: `hiddenTestCases #${i + 1}: output cannot be empty.` };
+      }
+      if (String(tc.input).length > 5000 || String(tc.output).length > 5000) {
+        return { valid: false, field: 'hiddenTestCases', message: `hiddenTestCases #${i + 1}: input and output cannot exceed 5000 characters.` };
+      }
+    }
+  }
+
+  // startCode: at most one entry per language, canonical list
+  const startCodes = data.startCode !== undefined ? data.startCode : (existingProblem ? existingProblem.startCode : []);
+  if (isCreate || data.startCode !== undefined) {
+    if (!Array.isArray(startCodes) || startCodes.length < 1) {
+      return { valid: false, field: 'startCode', message: 'startCode must contain at least one entry.' };
+    }
+    const seenStartLangs = new Set();
+    for (let i = 0; i < startCodes.length; i++) {
+      const sc = startCodes[i];
+      if (!sc || typeof sc !== 'object') {
+        return { valid: false, field: 'startCode', message: `startCode #${i + 1} must be an object.` };
+      }
+      const norm = normalizeLanguage(sc.language);
+      if (!CANONICAL_LANGUAGES.includes(norm)) {
+        return { valid: false, field: 'startCode', message: `startCode: Unsupported language "${sc.language}". Allowed: JavaScript, C++, Java, Python3.` };
+      }
+      if (seenStartLangs.has(norm)) {
+        return { valid: false, field: 'startCode', message: `startCode: Duplicate entry for language "${sc.language}".` };
+      }
+      seenStartLangs.add(norm);
+      if (!sc.initialCode || typeof sc.initialCode !== 'string' || !sc.initialCode.trim()) {
+        return { valid: false, field: 'startCode', message: `startCode: initialCode is required for ${sc.language}.` };
+      }
+    }
+  }
+
+  // referenceSolution: at most one entry per language, canonical list, at least one entry
+  const refSolutions = data.referenceSolution !== undefined ? data.referenceSolution : (existingProblem ? existingProblem.referenceSolution : []);
+  if (isCreate || data.referenceSolution !== undefined) {
+    if (!Array.isArray(refSolutions) || refSolutions.length < 1) {
+      return { valid: false, field: 'referenceSolution', message: 'referenceSolution must contain at least one entry.' };
+    }
+    const seenRefLangs = new Set();
+    for (let i = 0; i < refSolutions.length; i++) {
+      const ref = refSolutions[i];
+      if (!ref || typeof ref !== 'object') {
+        return { valid: false, field: 'referenceSolution', message: `referenceSolution #${i + 1} must be an object.` };
+      }
+      const norm = normalizeLanguage(ref.language);
+      if (!CANONICAL_LANGUAGES.includes(norm)) {
+        return { valid: false, field: 'referenceSolution', message: `referenceSolution: Unsupported language "${ref.language}". Allowed: JavaScript, C++, Java, Python3.` };
+      }
+      if (seenRefLangs.has(norm)) {
+        return { valid: false, field: 'referenceSolution', message: `referenceSolution: Duplicate entry for language "${ref.language}".` };
+      }
+      seenRefLangs.add(norm);
+      if (!ref.completeCode || typeof ref.completeCode !== 'string' || !ref.completeCode.trim()) {
+        return { valid: false, field: 'referenceSolution', message: `referenceSolution: completeCode is required for ${ref.language}.` };
+      }
+    }
+  }
+
+  // Cross-check: every referenceSolution language must also have a startCode entry
+  const finalStartLangs = new Set((startCodes || []).map((s) => normalizeLanguage(s.language)));
+  for (const ref of (refSolutions || [])) {
+    const norm = normalizeLanguage(ref.language);
+    if (!finalStartLangs.has(norm)) {
+      return { valid: false, field: 'referenceSolution', message: `referenceSolution: Language "${ref.language}" must also have a startCode entry.` };
+    }
+  }
+
+  return { valid: true };
 };
 
 const createProblem = async (req, res) => {
@@ -113,41 +333,45 @@ const createProblem = async (req, res) => {
   } = req.body;
 
   try {
-    if (!title || typeof title !== 'string' || !title.trim()) {
-      return res.status(400).json({ message: "Title is required." });
+    // 1. Comprehensive input validation (A2)
+    const validation = validateProblemPayload(req.body, true);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    const trimmedTitle = title.trim();
+
+    // 2. Title uniqueness check (A3)
+    const existingProblem = await Problem.findOne({
+      title: { $regex: new RegExp(`^${trimmedTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    });
+    if (existingProblem) {
+      return res.status(409).json({ message: "A problem with this title already exists." });
     }
 
     const tagCheck = validateAndNormalizeTags(tags);
-    if (!tagCheck.valid) {
-      return res.status(400).json({ message: tagCheck.error });
-    }
-
-    // Constraints validation
     const cleanConstraints = Array.isArray(constraints)
-      ? constraints.map(c => String(c).trim()).filter(Boolean)
-      : [];
-    if (cleanConstraints.length > 20) {
-      return res.status(400).json({ message: "Constraints cannot exceed 20 items." });
-    }
-    for (const c of cleanConstraints) {
-      if (c.length > 300) {
-        return res.status(400).json({ message: "Each constraint cannot exceed 300 characters." });
-      }
-    }
+      ? constraints.map((c) => String(c).trim()).filter(Boolean).join('\n')
+      : (typeof constraints === 'string' ? constraints.trim() : '');
+    const parsedTimeLimit = timeLimit != null
+      ? (Number(timeLimit) <= 10 ? Number(timeLimit) * 1000 : Number(timeLimit))
+      : 2000;
+    const parsedMemoryLimit = memoryLimit != null
+      ? (Number(memoryLimit) <= 512 ? Number(memoryLimit) * 1000 : Number(memoryLimit))
+      : 256000;
 
-    // Time & Memory limits validation
-    const parsedTimeLimit = timeLimit != null ? Number(timeLimit) : 2;
-    if (isNaN(parsedTimeLimit) || parsedTimeLimit < 1 || parsedTimeLimit > 10) {
-      return res.status(400).json({ message: "Time limit must be a number between 1 and 10 seconds." });
-    }
+    const formattedStartCode = (startCode || []).map((s) => ({
+      language: canonicalLanguageName(s.language),
+      initialCode: s.initialCode,
+    }));
+    const formattedRefSolution = (referenceSolution || []).map((r) => ({
+      language: canonicalLanguageName(r.language),
+      completeCode: r.completeCode,
+    }));
 
-    const parsedMemoryLimit = memoryLimit != null ? Number(memoryLimit) : 256;
-    if (isNaN(parsedMemoryLimit) || parsedMemoryLimit < 64 || parsedMemoryLimit > 512) {
-      return res.status(400).json({ message: "Memory limit must be a number between 64 and 512 MB." });
-    }
-
+    // 3. Verify reference solution on Judge0
     const verifyError = await verifyReferenceSolutions(
-      referenceSolution,
+      formattedRefSolution,
       visibleTestCases,
       hiddenTestCases,
       parsedTimeLimit,
@@ -158,12 +382,12 @@ const createProblem = async (req, res) => {
     }
 
     const problemNumber = await getNextSequence('problemNumber');
-    const slug = await generateUniqueSlug(title, Problem);
+    const slug = await generateUniqueSlug(trimmedTitle, Problem);
 
     const userProblem = await Problem.create({
-      title: title.trim(),
-      description,
-      difficulty,
+      title: trimmedTitle,
+      description: description.trim(),
+      difficulty: difficulty.toLowerCase().trim(),
       tags: tagCheck.tags,
       problemNumber,
       slug,
@@ -172,8 +396,8 @@ const createProblem = async (req, res) => {
       memoryLimit: parsedMemoryLimit,
       visibleTestCases,
       hiddenTestCases,
-      startCode,
-      referenceSolution,
+      startCode: formattedStartCode,
+      referenceSolution: formattedRefSolution,
       problemCreator: req.result._id,
     });
 
@@ -202,66 +426,125 @@ const updateProblem = async (req, res) => {
       return res.status(404).json({ message: "Problem is Missing" });
     }
 
+    // 1. Validate payload (A2)
+    const validation = validateProblemPayload(req.body, false, DsaProblem);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
     const updateData = { ...req.body };
     // Rule: NEVER change slug or problemNumber, even if sent in body
     delete updateData.slug;
     delete updateData.problemNumber;
     delete updateData.problemCreator;
 
+    // 2. Title uniqueness check (A3)
+    if (updateData.title !== undefined) {
+      const trimmedTitle = updateData.title.trim();
+      const existingProblem = await Problem.findOne({
+        _id: { $ne: id },
+        title: { $regex: new RegExp(`^${trimmedTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      });
+      if (existingProblem) {
+        return res.status(409).json({ message: "A problem with this title already exists." });
+      }
+      updateData.title = trimmedTitle;
+    }
+
+    if (updateData.description !== undefined) {
+      updateData.description = updateData.description.trim();
+    }
+
+    if (updateData.difficulty !== undefined) {
+      updateData.difficulty = updateData.difficulty.toLowerCase().trim();
+    }
+
     if (updateData.tags !== undefined) {
       const tagCheck = validateAndNormalizeTags(updateData.tags);
-      if (!tagCheck.valid) {
-        return res.status(400).json({ message: tagCheck.error });
-      }
       updateData.tags = tagCheck.tags;
     }
 
     if (updateData.constraints !== undefined) {
-      const cleanConstraints = Array.isArray(updateData.constraints)
-        ? updateData.constraints.map(c => String(c).trim()).filter(Boolean)
-        : [];
-      if (cleanConstraints.length > 20) {
-        return res.status(400).json({ message: "Constraints cannot exceed 20 items." });
-      }
-      for (const c of cleanConstraints) {
-        if (c.length > 300) {
-          return res.status(400).json({ message: "Each constraint cannot exceed 300 characters." });
-        }
-      }
-      updateData.constraints = cleanConstraints;
+      updateData.constraints = Array.isArray(updateData.constraints)
+        ? updateData.constraints.map((c) => String(c).trim()).filter(Boolean).join('\n')
+        : (typeof updateData.constraints === 'string' ? updateData.constraints.trim() : '');
     }
 
     let parsedTimeLimit = DsaProblem.timeLimit;
     if (updateData.timeLimit !== undefined) {
-      parsedTimeLimit = Number(updateData.timeLimit);
-      if (isNaN(parsedTimeLimit) || parsedTimeLimit < 1 || parsedTimeLimit > 10) {
-        return res.status(400).json({ message: "Time limit must be a number between 1 and 10 seconds." });
-      }
+      parsedTimeLimit = Number(updateData.timeLimit) <= 10
+        ? Number(updateData.timeLimit) * 1000
+        : Number(updateData.timeLimit);
       updateData.timeLimit = parsedTimeLimit;
     }
 
     let parsedMemoryLimit = DsaProblem.memoryLimit;
     if (updateData.memoryLimit !== undefined) {
-      parsedMemoryLimit = Number(updateData.memoryLimit);
-      if (isNaN(parsedMemoryLimit) || parsedMemoryLimit < 64 || parsedMemoryLimit > 512) {
-        return res.status(400).json({ message: "Memory limit must be a number between 64 and 512 MB." });
-      }
+      parsedMemoryLimit = Number(updateData.memoryLimit) <= 512
+        ? Number(updateData.memoryLimit) * 1000
+        : Number(updateData.memoryLimit);
       updateData.memoryLimit = parsedMemoryLimit;
     }
 
-    const referenceSolution = updateData.referenceSolution || DsaProblem.referenceSolution;
-    const visibleTestCases = updateData.visibleTestCases || DsaProblem.visibleTestCases;
-    const hiddenTestCases = updateData.hiddenTestCases || DsaProblem.hiddenTestCases;
+    if (updateData.startCode !== undefined) {
+      updateData.startCode = updateData.startCode.map((s) => ({
+        language: canonicalLanguageName(s.language),
+        initialCode: s.initialCode,
+      }));
+    }
 
-    const verifyError = await verifyReferenceSolutions(
-      referenceSolution,
-      visibleTestCases,
-      hiddenTestCases,
-      parsedTimeLimit,
-      parsedMemoryLimit
-    );
-    if (verifyError) {
-      return res.status(400).json({ message: verifyError });
+    if (updateData.referenceSolution !== undefined) {
+      updateData.referenceSolution = updateData.referenceSolution.map((r) => ({
+        language: canonicalLanguageName(r.language),
+        completeCode: r.completeCode,
+      }));
+    }
+
+    // 3. Conditional Judge0 verification (A1)
+    let referenceSolutionChanged = false;
+    if (updateData.referenceSolution !== undefined) {
+      const normOld = JSON.stringify(normalizeSolutionsForCompare(DsaProblem.referenceSolution));
+      const normNew = JSON.stringify(normalizeSolutionsForCompare(updateData.referenceSolution));
+      if (normOld !== normNew) {
+        referenceSolutionChanged = true;
+      }
+    }
+
+    let visibleChanged = false;
+    if (updateData.visibleTestCases !== undefined) {
+      const normOld = JSON.stringify(normalizeVisibleCasesForCompare(DsaProblem.visibleTestCases));
+      const normNew = JSON.stringify(normalizeVisibleCasesForCompare(updateData.visibleTestCases));
+      if (normOld !== normNew) {
+        visibleChanged = true;
+      }
+    }
+
+    let hiddenChanged = false;
+    if (updateData.hiddenTestCases !== undefined) {
+      const normOld = JSON.stringify(normalizeHiddenCasesForCompare(DsaProblem.hiddenTestCases));
+      const normNew = JSON.stringify(normalizeHiddenCasesForCompare(updateData.hiddenTestCases));
+      if (normOld !== normNew) {
+        hiddenChanged = true;
+      }
+    }
+
+    const reverified = referenceSolutionChanged || visibleChanged || hiddenChanged;
+
+    if (reverified) {
+      const referenceSolution = updateData.referenceSolution || DsaProblem.referenceSolution;
+      const visibleTestCases = updateData.visibleTestCases || DsaProblem.visibleTestCases;
+      const hiddenTestCases = updateData.hiddenTestCases || DsaProblem.hiddenTestCases;
+
+      const verifyError = await verifyReferenceSolutions(
+        referenceSolution,
+        visibleTestCases,
+        hiddenTestCases,
+        parsedTimeLimit,
+        parsedMemoryLimit
+      );
+      if (verifyError) {
+        return res.status(400).json({ message: verifyError });
+      }
     }
 
     const newProblem = await Problem.findByIdAndUpdate(
@@ -270,7 +553,16 @@ const updateProblem = async (req, res) => {
       { runValidators: true, new: true }
     );
 
-    return res.status(200).json(newProblem);
+    return res.status(200).json({
+      message: "Problem updated",
+      problem: {
+        _id: newProblem._id,
+        slug: newProblem.slug,
+        problemNumber: newProblem.problemNumber,
+        title: newProblem.title,
+      },
+      reverified,
+    });
   } catch (err) {
     if (err.message === "Unsupported language") {
       return res.status(400).json({ message: "Unsupported language" });
@@ -292,12 +584,14 @@ const deleteProblem = async (req, res) => {
       return res.status(404).json({ message: "Problem is Missing" });
     }
 
-    // 1. Delete all Submissions with that problemId
-    const subResult = await Submission.deleteMany({ problemId: id });
+    const problemId = deletedProblem._id;
+
+    // 1. Cascade delete all associated submissions
+    const subResult = await Submission.deleteMany({ problemId });
     const deletedSubmissions = subResult.deletedCount || 0;
 
-    // 2. Find SolutionVideo docs, delete Cloudinary assets, then delete docs
-    const videos = await SolutionVideo.find({ problemId: id });
+    // 2. Cascade delete all associated solution videos and Cloudinary assets
+    const videos = await SolutionVideo.find({ problemId });
     for (const video of videos) {
       if (video.cloudinaryPublicId) {
         try {
@@ -307,13 +601,16 @@ const deleteProblem = async (req, res) => {
         }
       }
     }
-    const videoResult = await SolutionVideo.deleteMany({ problemId: id });
+    const videoResult = await SolutionVideo.deleteMany({ problemId });
     const deletedVideos = videoResult.deletedCount || 0;
 
-    // 3. $pull that problemId from problemSolved of all Users
+    // 3. Cascade delete all associated discussion threads
+    await Discussion.deleteMany({ problemId });
+
+    // 4. $pull that problemId from problemSolved of all Users
     const userResult = await User.updateMany(
-      { problemSolved: id },
-      { $pull: { problemSolved: id } }
+      { problemSolved: problemId },
+      { $pull: { problemSolved: problemId } }
     );
     const userSolvedRefs = userResult.modifiedCount || 0;
 
@@ -331,22 +628,30 @@ const deleteProblem = async (req, res) => {
 };
 
 const getProblemById = async (req, res) => {
-  const { id } = req.params;
+  const id = req.params.identifier || req.params.id;
 
   try {
-    if (!id || !mongoose.isValidObjectId(id)) {
-      return res.status(400).json({ message: "Invalid problem ID" });
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ message: "Invalid problem identifier" });
     }
 
-    const getProblem = await Problem.findById(id).select(
+    const trimmed = id.trim();
+    let query;
+    if (mongoose.isValidObjectId(trimmed)) {
+      query = { _id: trimmed };
+    } else {
+      query = { slug: trimmed.toLowerCase() };
+    }
+
+    const getProblem = await Problem.findOne(query).select(
       '_id title description difficulty tags visibleTestCases startCode slug problemNumber constraints timeLimit memoryLimit'
     );
 
     if (!getProblem) {
-      return res.status(404).json({ message: "Problem is Missing" });
+      return res.status(404).json({ message: "Problem not found" });
     }
 
-    const videos = await SolutionVideo.findOne({ problemId: id });
+    const videos = await SolutionVideo.findOne({ problemId: getProblem._id });
 
     if (videos) {
       const responseData = {
@@ -431,15 +736,111 @@ const getAdminProblemById = async (req, res) => {
 
 const getAllProblem = async (req, res) => {
   try {
-    const getProblem = await Problem.find({}).select(
-      '_id title difficulty tags slug problemNumber'
-    );
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      difficulty,
+      tag,
+      sortBy = 'problemNumber',
+      sort,
+    } = req.query;
 
-    if (getProblem.length === 0) {
-      return res.status(404).json({ message: "Problem is Missing" });
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
+
+    const filter = {};
+
+    // Search query on title and slug
+    if (search && typeof search === 'string') {
+      const trimmedSearch = search.trim();
+      if (trimmedSearch) {
+        const escaped = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = new RegExp(escaped, 'i');
+        filter.$or = [
+          { title: { $regex: searchRegex } },
+          { slug: { $regex: searchRegex } },
+        ];
+      }
     }
 
-    return res.status(200).json(getProblem);
+    // Difficulty filter
+    if (difficulty && typeof difficulty === 'string') {
+      const diff = difficulty.toLowerCase().trim();
+      if (['easy', 'medium', 'hard'].includes(diff)) {
+        filter.difficulty = diff;
+      }
+    }
+
+    // Tag filter
+    if (tag && typeof tag === 'string') {
+      const trimmedTag = tag.trim();
+      if (trimmedTag && trimmedTag.toLowerCase() !== 'all') {
+        const tagParts = trimmedTag
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean);
+
+        if (tagParts.length === 1) {
+          const matched = CANONICAL_TAGS.find(
+            (ct) => ct.toLowerCase() === tagParts[0].toLowerCase()
+          );
+          filter.tags = matched || tagParts[0];
+        } else if (tagParts.length > 1) {
+          const canonicalParts = tagParts.map((tp) => {
+            const matched = CANONICAL_TAGS.find(
+              (ct) => ct.toLowerCase() === tp.toLowerCase()
+            );
+            return matched || tp;
+          });
+          filter.tags = { $all: canonicalParts };
+        }
+      }
+    }
+
+    // Sort options: problemNumber, difficulty, title
+    const effectiveSort = sortBy || sort || 'problemNumber';
+    let sortObj = { problemNumber: 1, _id: 1 };
+    if (effectiveSort === 'title' || effectiveSort === 'alpha') {
+      sortObj = { title: 1 };
+    } else if (effectiveSort === 'difficulty') {
+      sortObj = { difficulty: 1, problemNumber: 1 };
+    } else if (effectiveSort === 'newest') {
+      sortObj = { _id: -1 };
+    } else if (effectiveSort === 'oldest') {
+      sortObj = { _id: 1 };
+    } else {
+      sortObj = { problemNumber: 1, _id: 1 };
+    }
+
+    const totalProblems = await Problem.countDocuments(filter);
+    const totalPages = Math.ceil(totalProblems / limitNum) || 1;
+    const skip = (pageNum - 1) * limitNum;
+
+    const problems = await Problem.find(filter)
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limitNum)
+      .select('_id problemNumber title slug difficulty tags timeLimit memoryLimit');
+
+    const pagination = {
+      currentPage: pageNum,
+      totalPages,
+      totalProblems,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+    };
+
+    return res.status(200).json({
+      success: true,
+      problems,
+      pagination,
+      availableTags: CANONICAL_TAGS,
+      total: totalProblems,
+      totalPages,
+      page: pageNum,
+      limit: limitNum,
+    });
   } catch (err) {
     return res.status(500).json({ message: "Error: " + err.message });
   }
@@ -487,7 +888,20 @@ const submittedProblem = async (req, res) => {
 
     const ans = await Submission.find({ userId, problemId }).sort({ createdAt: -1 });
 
-    return res.status(200).json(ans || []);
+    const showHiddenDetails = process.env.SHOW_FAILED_HIDDEN_TEST_DETAILS !== 'false';
+    const sanitized = ans.map((sub) => {
+      const doc = sub.toObject();
+      if (!showHiddenDetails && doc.failedTestCase && doc.failedTestCase.isHidden) {
+        doc.failedTestCase.input = null;
+        doc.failedTestCase.expectedOutput = null;
+        doc.failedTestCase.actualOutput = null;
+      }
+      doc.runtimePercentile = doc.runtimePercentile != null ? doc.runtimePercentile : null;
+      doc.memoryPercentile = doc.memoryPercentile != null ? doc.memoryPercentile : null;
+      return doc;
+    });
+
+    return res.status(200).json(sanitized);
   } catch (err) {
     console.error("submittedProblem error:", err);
     return res.status(500).json({ message: "Internal Server Error" });
@@ -587,6 +1001,92 @@ const getProblemList = async (req, res) => {
   }
 };
 
+const getAdminProblemList = async (req, res) => {
+  try {
+    const problems = await Problem.find({})
+      .select('_id problemNumber slug title difficulty tags createdAt visibleTestCases hiddenTestCases')
+      .sort({ problemNumber: 1, _id: 1 })
+      .lean();
+
+    const videos = await SolutionVideo.find({}, { problemId: 1 }).lean();
+    const videoProblemIds = new Set(videos.map((v) => String(v.problemId)));
+
+    const adminList = problems.map((p) => {
+      let createdAt = p.createdAt;
+      if (!createdAt && p._id) {
+        try {
+          const timestamp = parseInt(String(p._id).substring(0, 8), 16) * 1000;
+          createdAt = new Date(timestamp);
+        } catch {
+          createdAt = null;
+        }
+      }
+
+      return {
+        _id: p._id,
+        problemNumber: p.problemNumber,
+        slug: p.slug,
+        title: p.title,
+        difficulty: p.difficulty,
+        tags: p.tags,
+        createdAt,
+        hasVideo: videoProblemIds.has(String(p._id)),
+        visibleCount: Array.isArray(p.visibleTestCases) ? p.visibleTestCases.length : 0,
+        hiddenCount: Array.isArray(p.hiddenTestCases) ? p.hiddenTestCases.length : 0,
+      };
+    });
+
+    return res.status(200).json(adminList);
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch admin problem list: " + err.message });
+  }
+};
+
+const getDailyChallenge = async (req, res) => {
+  try {
+    const totalCount = await Problem.countDocuments({});
+    if (totalCount === 0) {
+      return res.status(404).json({ success: false, message: "No problems found" });
+    }
+
+    // Deterministic problem selection based on current UTC date string (YYYY-MM-DD)
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+
+    // Compute deterministic hash from date string modulo total problems count
+    let hash = 0;
+    for (let i = 0; i < dateStr.length; i++) {
+      hash = (hash * 31 + dateStr.charCodeAt(i)) >>> 0;
+    }
+    const index = hash % totalCount;
+
+    const problem = await Problem.findOne({})
+      .sort({ problemNumber: 1, _id: 1 })
+      .skip(index)
+      .select('_id problemNumber title slug difficulty tags')
+      .lean();
+
+    if (!problem) {
+      return res.status(404).json({ success: false, message: "Problem not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      date: dateStr,
+      problem: {
+        _id: problem._id,
+        problemNumber: problem.problemNumber,
+        title: problem.title,
+        slug: problem.slug,
+        difficulty: problem.difficulty,
+        tags: problem.tags,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Error: " + err.message });
+  }
+};
+
 module.exports = {
   createProblem,
   updateProblem,
@@ -594,9 +1094,11 @@ module.exports = {
   getProblemById,
   getProblemBySlug,
   getAdminProblemById,
+  getAdminProblemList,
   getAllProblem,
   getProblemTags,
   getProblemList,
+  getDailyChallenge,
   solvedAllProblembyUser,
   submittedProblem,
 };

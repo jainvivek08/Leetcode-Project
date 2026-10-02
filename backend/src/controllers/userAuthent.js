@@ -1,13 +1,15 @@
 const redisClient = require("../config/redis");
 const User =  require("../models/user");
+const Submission = require("../models/submission");
+const mongoose = require("mongoose");
 const validate = require('../utils/validator');
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
-const { getCookieOptions, getJwtExpiresInSeconds } = require("../utils/cookieOptions");
+const { getCookieOptions, getClearCookieOptions, getJwtExpiresInSeconds } = require("../utils/cookieOptions");
 
 const register = async (req,res)=>{
     try{
-        const { firstName, lastName, emailId, password } = req.body;
+        const { firstName, lastName, emailId, password, age } = req.body;
         const normalizedEmail = (emailId || '').toLowerCase().trim();
 
         // Validate mandatory fields
@@ -15,14 +17,24 @@ const register = async (req,res)=>{
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Explicit field whitelisting - strictly force role to 'user'
-        const user = await User.create({
+        // Strict whitelist: only firstName, lastName, emailId, password, age
+        // Explicitly set role: 'user' and disallow role, isAdmin, problemSolved, createdAt, etc.
+        const allowedUserData = {
             firstName: firstName?.trim(),
             lastName: lastName?.trim() || '',
             emailId: normalizedEmail,
             password: hashedPassword,
             role: 'user'
-        });
+        };
+
+        if (age !== undefined && age !== null && age !== '') {
+            const parsedAge = Number(age);
+            if (!isNaN(parsedAge) && parsedAge >= 6 && parsedAge <= 80) {
+                allowedUserData.age = parsedAge;
+            }
+        }
+
+        const user = await User.create(allowedUserData);
 
         const token = jwt.sign(
             { _id: user._id, emailId: user.emailId, role: 'user' },
@@ -117,7 +129,7 @@ const blockTokenAndClearCookie = async (req, res) => {
             console.warn("Error decoding token for Redis blocklist:", err.message);
         }
     }
-    res.clearCookie("token", getCookieOptions({ maxAge: 0 }));
+    res.clearCookie("token", getClearCookieOptions());
 };
 
 // logOut feature
@@ -235,51 +247,155 @@ const updateProfile = async (req, res) => {
     }
 };
 
-const getUserRank = async (req, res) => {
+const getUserRank = async (req, res, next) => {
     try {
         const userId = req.result._id;
         const currentUser = await User.findById(userId).select('problemSolved').lean();
-        const mySolved = currentUser?.problemSolved ? currentUser.problemSolved.length : 0;
+        const currentSolvedCount = Array.isArray(currentUser?.problemSolved)
+            ? currentUser.problemSolved.length
+            : 0;
+
         const totalUsers = await User.countDocuments();
 
-        if (mySolved === 0) {
-            return res.status(200).json({
-                rank: 'Unranked',
-                rankPercentile: 'Solve problems to get ranked',
-                totalSolved: 0,
-                totalUsers: totalUsers
-            });
-        }
+        // O(1) memory rank calculation directly using countDocuments
+        const usersAhead = await User.countDocuments({
+            $expr: { $gt: [{ $size: { $ifNull: ["$problemSolved", []] } }, currentSolvedCount] }
+        });
+        const rank = usersAhead + 1;
+        const percentile = totalUsers > 0 ? Math.max(1, Math.round((rank / totalUsers) * 100)) : 100;
 
-        const countResult = await User.aggregate([
-            {
-                $project: {
-                    solved: { $size: { $ifNull: ['$problemSolved', []] } }
-                }
-            },
-            {
-                $match: {
-                    solved: { $gt: mySolved }
-                }
-            },
-            {
-                $count: 'usersWithMore'
-            }
-        ]);
-
-        const usersWithMoreSolved = countResult.length > 0 ? countResult[0].usersWithMore : 0;
-        const rank = usersWithMoreSolved + 1;
-        const percentile = Math.max(1, Math.round((rank / totalUsers) * 100));
-
-        res.status(200).json({
-            rank: `#${rank}`,
-            rankPercentile: rank === 1 ? 'Top 1% on CodeQuest' : `Top ${percentile}% on CodeQuest`,
-            totalSolved: mySolved,
-            totalUsers: totalUsers
+        return res.status(200).json({
+            success: true,
+            rank,
+            totalUsers,
+            solvedCount: currentSolvedCount,
+            rankPercentile: currentSolvedCount === 0
+                ? 'Solve problems to get ranked'
+                : (rank === 1 ? 'Top 1% on CodeQuest' : `Top ${percentile}% on CodeQuest`),
+            totalSolved: currentSolvedCount
         });
     } catch (err) {
-        res.status(500).json({ error: "Failed to compute rank: " + err });
+        next(err);
     }
 };
 
-module.exports = {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank};
+const getActivityHeatmap = async (req, res) => {
+    try {
+        const userId = req.result._id;
+        const userObjectId = new mongoose.Types.ObjectId(userId);
+
+        // Aggregate from the Submission collection for the authenticated user
+        // Group and count accepted submissions per calendar day formatted as YYYY-MM-DD
+        const allAcceptedDays = await Submission.aggregate([
+            {
+                $match: {
+                    userId: userObjectId,
+                    status: 'accepted'
+                }
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { _id: 1 }
+            }
+        ]);
+
+        const activeDates = allAcceptedDays.map((d) => d._id);
+        const activeDateSet = new Set(activeDates);
+
+        // 365 days window for activityMap
+        const now = new Date();
+        const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        const oneYearAgoStr = oneYearAgo.toISOString().slice(0, 10);
+
+        // Produce an activityMap object mapping date strings to submission counts within the last 365 days
+        const activityMap = {};
+        for (const item of allAcceptedDays) {
+            if (item._id >= oneYearAgoStr) {
+                activityMap[item._id] = item.count;
+            }
+        }
+
+        // totalActiveDays: total count of unique active dates with at least 1 accepted submission
+        const totalActiveDays = activeDates.length;
+
+        // Current streak logic:
+        // Check if today has at least 1 accepted submission. If yes, count consecutive active days backwards.
+        // If today has no submission, check if yesterday was active. If yes, count consecutive active days backwards from yesterday (the streak is preserved until today ends).
+        // If neither today nor yesterday was active, currentStreak is 0.
+        const todayStr = now.toISOString().slice(0, 10);
+
+        const getOffsetDateStr = (baseDate, offsetDays) => {
+            const d = new Date(baseDate);
+            d.setUTCDate(d.getUTCDate() + offsetDays);
+            return d.toISOString().slice(0, 10);
+        };
+
+        const yesterdayStr = getOffsetDateStr(now, -1);
+
+        let currentStreak = 0;
+        if (activeDateSet.has(todayStr)) {
+            currentStreak = 1;
+            let offset = -1;
+            while (activeDateSet.has(getOffsetDateStr(now, offset))) {
+                currentStreak++;
+                offset--;
+            }
+        } else if (activeDateSet.has(yesterdayStr)) {
+            currentStreak = 1;
+            let offset = -2;
+            while (activeDateSet.has(getOffsetDateStr(now, offset))) {
+                currentStreak++;
+                offset--;
+            }
+        } else {
+            currentStreak = 0;
+        }
+
+        // maxStreak: the longest unbroken chain of consecutive active days found across the user's entire submission history.
+        let maxStreak = 0;
+        if (activeDates.length > 0) {
+            maxStreak = 1;
+            let tempStreak = 1;
+
+            for (let i = 1; i < activeDates.length; i++) {
+                const prev = new Date(activeDates[i - 1] + 'T00:00:00.000Z');
+                const curr = new Date(activeDates[i] + 'T00:00:00.000Z');
+                const diffDays = Math.round((curr.getTime() - prev.getTime()) / (24 * 60 * 60 * 1000));
+
+                if (diffDays === 1) {
+                    tempStreak++;
+                    if (tempStreak > maxStreak) {
+                        maxStreak = tempStreak;
+                    }
+                } else if (diffDays > 1) {
+                    tempStreak = 1;
+                }
+            }
+        }
+
+        // Ensure maxStreak is at least currentStreak
+        if (currentStreak > maxStreak) {
+            maxStreak = currentStreak;
+        }
+
+        return res.status(200).json({
+            success: true,
+            currentStreak,
+            maxStreak,
+            totalActiveDays,
+            activityMap
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: "Error fetching activity heatmap: " + err.message
+        });
+    }
+};
+
+module.exports = {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank, getActivityHeatmap};

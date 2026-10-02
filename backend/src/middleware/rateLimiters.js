@@ -1,11 +1,8 @@
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 // Rate limiting constants (configurable via env if needed, with safe defaults)
-const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const LOGIN_MAX = 10;
-
-const REGISTER_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const REGISTER_MAX = 5;
+const AUTH_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const AUTH_MAX = 10;
 
 const SUBMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const SUBMIT_MAX = 10;
@@ -14,7 +11,7 @@ const RUN_WINDOW_MS = 60 * 1000; // 1 minute
 const RUN_MAX = 20;
 
 const AI_CHAT_WINDOW_MS = 60 * 1000; // 1 minute
-const AI_CHAT_MAX = 10;
+const AI_CHAT_MAX = 15; // 15 requests per minute
 
 const getGeneralLimitMax = () => {
   const envVal = parseInt(process.env.GENERAL_RATE_LIMIT_MAX, 10);
@@ -40,6 +37,8 @@ const isSkippedGeneralRoute = (req) => {
     '/problem/tags',
     '/problem/problemSolvedByUser',
     '/user/getRank',
+    '/user/activity-heatmap',
+    '/problem/daily-challenge',
   ];
   return skippedPaths.includes(rawPath);
 };
@@ -75,29 +74,19 @@ const buildLimiter = (options) => {
   });
 };
 
-// 1. Login limiter: 10 requests / 15 min, keyed by IP + normalized emailId.
-// Only counts failed logins (skipSuccessfulRequests: true).
-const loginLimiter = buildLimiter({
-  windowMs: LOGIN_WINDOW_MS,
-  limit: LOGIN_MAX,
-  skipSuccessfulRequests: true,
-  message: "Too many login attempts. Please try again after 15 minutes.",
-  keyGenerator: (req) => {
-    const ipKey = ipKeyGenerator(req.ip);
-    const email = (req.body?.emailId || req.body?.email || '').trim().toLowerCase();
-    return `${ipKey}_${email}`;
-  }
-});
-
-// 2. Register limiter: 5 requests / hour per IP.
-const registerLimiter = buildLimiter({
-  windowMs: REGISTER_WINDOW_MS,
-  limit: REGISTER_MAX,
-  message: "Too many accounts created from this IP. Please try again after an hour.",
+// 1. Auth Limiter (Login & Register): 10 requests / 15 minutes per IP.
+const authLimiter = buildLimiter({
+  windowMs: AUTH_WINDOW_MS,
+  limit: AUTH_MAX,
+  message: "Too many authentication attempts. Please try again after 15 minutes.",
   keyGenerator: (req) => ipKeyGenerator(req.ip)
 });
 
-// 3. Submit limiter: 10 requests / minute per authenticated user id, fallback to IP.
+// Backward-compatible aliases for auth routes
+const loginLimiter = authLimiter;
+const registerLimiter = authLimiter;
+
+// 2. Submit limiter: 10 requests / minute per authenticated user id, fallback to IP.
 const submitLimiter = buildLimiter({
   windowMs: SUBMIT_WINDOW_MS,
   limit: SUBMIT_MAX,
@@ -110,7 +99,7 @@ const submitLimiter = buildLimiter({
   }
 });
 
-// 4. Run limiter: 20 requests / minute per authenticated user id, fallback to IP.
+// 3. Run limiter: 20 requests / minute per authenticated user id, fallback to IP.
 const runLimiter = buildLimiter({
   windowMs: RUN_WINDOW_MS,
   limit: RUN_MAX,
@@ -123,11 +112,11 @@ const runLimiter = buildLimiter({
   }
 });
 
-// 5. AI Chat limiter: 10 requests / minute per authenticated user id, fallback to IP.
-const aiChatLimiter = buildLimiter({
+// 4. AI Assistant / Chat limiter: 15 requests / minute per IP/User (protecting Gemini API quota)
+const aiLimiter = buildLimiter({
   windowMs: AI_CHAT_WINDOW_MS,
   limit: AI_CHAT_MAX,
-  message: "Too many AI chat messages. Please wait a minute before sending another prompt.",
+  message: "AI chat rate limit reached. Please wait a moment before sending another prompt.",
   keyGenerator: (req) => {
     if (req.result && req.result._id) {
       return `user_${req.result._id.toString()}`;
@@ -136,7 +125,10 @@ const aiChatLimiter = buildLimiter({
   }
 });
 
-// 6. General limiter: configurable via env, skips frequent read routes.
+// Backward-compatible alias
+const aiChatLimiter = aiLimiter;
+
+// 5. General limiter: configurable via env, skips frequent read routes.
 // Default: 300 in production, 3000 in development per 15 min per IP.
 const generalLimiter = buildLimiter({
   windowMs: getGeneralLimitWindowMs(),
@@ -147,10 +139,12 @@ const generalLimiter = buildLimiter({
 });
 
 module.exports = {
+  authLimiter,
   loginLimiter,
   registerLimiter,
   submitLimiter,
   runLimiter,
+  aiLimiter,
   aiChatLimiter,
   generalLimiter
 };

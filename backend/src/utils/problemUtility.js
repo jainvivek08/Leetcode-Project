@@ -117,11 +117,13 @@ const submitToken = async (resultToken) => {
 
   const tokenChunks = chunkArray(resultToken, 20);
   let attempts = 0;
-  const maxAttempts = !isNaN(parseInt(process.env.JUDGE0_POLL_MAX_ATTEMPTS, 10))
-    ? parseInt(process.env.JUDGE0_POLL_MAX_ATTEMPTS, 10)
-    : 30;
-  const pollIntervalMs = !isNaN(parseInt(process.env.JUDGE0_POLL_INTERVAL_MS, 10))
-    ? parseInt(process.env.JUDGE0_POLL_INTERVAL_MS, 10)
+  const configuredMaxAttempts = parseInt(process.env.JUDGE0_POLL_MAX_ATTEMPTS, 10);
+  const maxAttempts = (!isNaN(configuredMaxAttempts) && configuredMaxAttempts > 0)
+    ? Math.min(configuredMaxAttempts, 12)
+    : 10;
+  const configuredInterval = parseInt(process.env.JUDGE0_POLL_INTERVAL_MS, 10);
+  const pollIntervalMs = (!isNaN(configuredInterval) && configuredInterval > 0)
+    ? configuredInterval
     : 1000;
 
   while (attempts < maxAttempts) {
@@ -156,6 +158,10 @@ const submitToken = async (resultToken) => {
           break;
         }
         for (const sub of data.submissions) {
+          if (!sub) {
+            allCompleted = false;
+            continue;
+          }
           allSubmissions.push(sub);
           if (!sub.status_id || sub.status_id <= 2) {
             allCompleted = false;
@@ -179,7 +185,12 @@ const submitToken = async (resultToken) => {
     await waiting(pollIntervalMs);
   }
 
-  throw new Error("Judge0 execution timed out");
+  // If Judge0 still reports status "In Queue" or "Processing" after the timeout limit:
+  // Stop polling and return status as 'judge_timeout' with message
+  return {
+    status: 'judge_timeout',
+    message: "Execution timed out while waiting for judge results. Please try again."
+  };
 };
 
 

@@ -110,6 +110,12 @@ function DeveloperProfile() {
   const [allProblems, setAllProblems] = useState([]);
   const [solvedProblems, setSolvedProblems] = useState([]);
   const [userRankData, setUserRankData] = useState(null);
+  const [heatmapData, setHeatmapData] = useState({
+    activityMap: {},
+    currentStreak: 0,
+    maxStreak: 0,
+    totalActiveDays: 0,
+  });
 
   // Modal and Toast states
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -133,8 +139,9 @@ function DeveloperProfile() {
     const fetchData = async () => {
       try {
         const { data: allProbs } = await axiosClient.get('/problem/getAllProblem');
-        if (isMounted && Array.isArray(allProbs)) {
-          setAllProblems(allProbs);
+        const probList = Array.isArray(allProbs) ? allProbs : (allProbs?.problems || []);
+        if (isMounted && probList.length > 0) {
+          setAllProblems(probList);
         }
       } catch (err) {
         console.warn('Could not fetch all problems:', err);
@@ -157,6 +164,20 @@ function DeveloperProfile() {
           }
         } catch (err) {
           console.warn('Could not fetch user rank:', err);
+        }
+
+        try {
+          const { data: heatmapRes } = await axiosClient.get('/user/activity-heatmap');
+          if (isMounted && heatmapRes?.success) {
+            setHeatmapData({
+              activityMap: heatmapRes.activityMap || {},
+              currentStreak: Number(heatmapRes.currentStreak) || 0,
+              maxStreak: Number(heatmapRes.maxStreak) || 0,
+              totalActiveDays: Number(heatmapRes.totalActiveDays) || 0,
+            });
+          }
+        } catch (err) {
+          console.warn('Could not fetch activity heatmap:', err);
         }
       }
     };
@@ -324,8 +345,20 @@ function DeveloperProfile() {
         iconBg: 'from-purple-500 to-indigo-600',
       });
     }
+    if (heatmapData.maxStreak >= 3) {
+      badges.push({
+        id: 'streak-master',
+        title: 'Streak Master',
+        subtitle: `${heatmapData.maxStreak}-Day Streak`,
+        icon: '🔥',
+        bgGradient: 'from-orange-50 to-amber-50/40',
+        border: 'border-orange-200/90',
+        tagColor: 'text-orange-700',
+        iconBg: 'from-orange-500 to-amber-500',
+      });
+    }
     return badges;
-  }, [solvedProblems]);
+  }, [solvedProblems, heatmapData]);
 
   // Save profile changes persistently to MongoDB Atlas & localStorage
   const handleSaveProfile = async (updatedFields) => {
@@ -500,8 +533,10 @@ function DeveloperProfile() {
             {/* Section 3: Submissions Heatmap Calendar */}
             <ActivityHeatmap
               totalSubmissions={solvedProblems.length}
-              currentStreak={solvedProblems.length > 0 ? 1 : 0}
-              maxStreak={solvedProblems.length > 0 ? 1 : 0}
+              currentStreak={heatmapData.currentStreak}
+              maxStreak={heatmapData.maxStreak}
+              totalActiveDays={heatmapData.totalActiveDays}
+              activityMap={heatmapData.activityMap}
               submissions={solvedProblems}
               onDayClick={handleDayClick}
             />

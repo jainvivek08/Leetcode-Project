@@ -16,6 +16,9 @@ import {
   Check,
   Code2,
   Sparkles,
+  ShieldCheck,
+  PlusCircle,
+  Sliders,
 } from 'lucide-react';
 import axiosClient from '../utils/axiosClient';
 import ProfileDropdown from '../components/profile/ProfileDropdown';
@@ -301,6 +304,22 @@ function ProblemsPage() {
 
   // Dropdown open states
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
+  const adminDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
+        setAdminDropdownOpen(false);
+      }
+    };
+    if (adminDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [adminDropdownOpen]);
 
   // Live problems & Solved state from MongoDB API
   const [liveProblems, setLiveProblems] = useState(BASE_PROBLEMS_DATA);
@@ -311,6 +330,8 @@ function ProblemsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalProblems, setTotalProblems] = useState(BASE_PROBLEMS_DATA.length);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [dailyChallenge, setDailyChallenge] = useState(null);
+  const [dailyDate, setDailyDate] = useState('');
   const reqIdRef = useRef(0);
 
   // Fetch real tag list with counts from backend
@@ -325,7 +346,21 @@ function ProblemsPage() {
         console.error('Failed to fetch tags from /problem/tags:', err);
       }
     };
+
+    const fetchDailyChallenge = async () => {
+      try {
+        const { data } = await axiosClient.get('/problem/daily-challenge');
+        if (data?.success && data?.problem) {
+          setDailyChallenge(data.problem);
+          setDailyDate(data.date || '');
+        }
+      } catch (err) {
+        console.warn('Failed to fetch daily challenge:', err);
+      }
+    };
+
     fetchTags();
+    fetchDailyChallenge();
   }, []);
 
   // Accordion state:
@@ -376,14 +411,17 @@ function ProblemsPage() {
     const fetchProblems = async () => {
       try {
         setLoading(true);
-        let sortParam = 'newest';
+        let sortParam = 'problemNumber';
         if (selectedSort === 'alpha') sortParam = 'title';
-        else if (selectedSort === 'number') sortParam = 'number';
+        else if (selectedSort === 'number') sortParam = 'problemNumber';
+        else if (selectedSort === 'difficulty') sortParam = 'difficulty';
+        else if (selectedSort === 'newest') sortParam = 'newest';
         else if (selectedSort === 'oldest') sortParam = 'oldest';
 
         const params = {
           page,
           limit: 20,
+          sortBy: sortParam,
           sort: sortParam,
         };
 
@@ -396,16 +434,22 @@ function ProblemsPage() {
         }
 
         if (selectedTopic !== 'All') {
-          params.tag = selectedTopic;
+          params.tag = TOPIC_TO_TAG_MAP[selectedTopic] || selectedTopic.toLowerCase();
         }
 
-        const { data } = await axiosClient.get('/problem/list', { params });
+        const { data } = await axiosClient.get('/problem/allProblem', { params });
 
         // Request race check: ignore stale response
         if (currentReqId !== reqIdRef.current) return;
 
-        if (data && Array.isArray(data.problems)) {
-          const merged = data.problems.map((apiP) => {
+        const problemsArray = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.problems)
+          ? data.problems
+          : [];
+
+        if (problemsArray.length > 0 || (data && (data.problems || data.success))) {
+          const merged = problemsArray.map((apiP) => {
             const foundMeta = BASE_PROBLEMS_DATA.find(
               (bp) =>
                 bp._id === apiP._id ||
@@ -416,7 +460,8 @@ function ProblemsPage() {
             const cleanTags = normalizeTags(apiP.tags);
             let topicName = 'Arrays';
             if (cleanTags.length > 0) {
-              topicName = tagLabel(cleanTags[0]);
+              const primaryTag = cleanTags[0];
+              topicName = TOPIC_TAG_MAP[primaryTag.toLowerCase()] || tagLabel(primaryTag);
             } else if (foundMeta?.topic) {
               topicName = foundMeta.topic;
             }
@@ -439,12 +484,12 @@ function ProblemsPage() {
           });
 
           setLiveProblems(merged);
-          setTotalProblems(data.total || 0);
-          setTotalPages(data.totalPages || 1);
+          setTotalProblems(data?.pagination?.totalProblems ?? data?.total ?? merged.length);
+          setTotalPages(data?.pagination?.totalPages ?? data?.totalPages ?? 1);
         }
       } catch (err) {
         if (currentReqId === reqIdRef.current) {
-          console.error('Failed to fetch problems from /problem/list:', err);
+          console.error('Failed to fetch problems from /problem/allProblem:', err);
         }
       } finally {
         if (currentReqId === reqIdRef.current) {
@@ -531,9 +576,9 @@ function ProblemsPage() {
     }));
   };
 
-  // Navigate to problem compiler arena with slug preference
+  // Navigate to problem compiler arena with canonical slug route
   const handleProblemClick = (problem) => {
-    navigate(`/problem/${problem.slug || problem._id}`);
+    navigate(`/problems/${problem.slug || problem._id}`);
   };
 
   // Group problems into 3-level hierarchy (Topic -> Difficulty -> Problems)
@@ -542,9 +587,17 @@ function ProblemsPage() {
 
     // 1. Filter problems
     const filteredProblems = liveProblems.filter((p) => {
-      // Topic filter
-      if (selectedTopic !== 'All' && p.topic !== selectedTopic) {
-        return false;
+      // Topic/Tag filter
+      if (selectedTopic !== 'All') {
+        const selNorm = selectedTopic.toLowerCase();
+        const hasTagMatch = Array.isArray(p.tags) && p.tags.some((t) => t.toLowerCase() === selNorm);
+        const hasTopicMatch =
+          (p.topic && p.topic.toLowerCase() === selNorm) ||
+          (TOPIC_TAG_MAP[selNorm] && p.topic === TOPIC_TAG_MAP[selNorm]) ||
+          (TOPIC_TO_TAG_MAP[p.topic] && TOPIC_TO_TAG_MAP[p.topic].toLowerCase() === selNorm);
+        if (!hasTagMatch && !hasTopicMatch) {
+          return false;
+        }
       }
       // Difficulty filter
       if (
@@ -565,11 +618,13 @@ function ProblemsPage() {
       // Search Query
       if (q) {
         const matchesTitle = p.title.toLowerCase().includes(q);
-        const matchesTopic = p.topic.toLowerCase().includes(q);
-        const matchesCompany = p.companies.some((c) =>
+        const matchesSlug = p.slug && p.slug.toLowerCase().includes(q);
+        const matchesTopic = p.topic && p.topic.toLowerCase().includes(q);
+        const matchesTag = Array.isArray(p.tags) && p.tags.some((t) => t.toLowerCase().includes(q));
+        const matchesCompany = p.companies && p.companies.some((c) =>
           c.toLowerCase().includes(q)
         );
-        return matchesTitle || matchesTopic || matchesCompany;
+        return matchesTitle || matchesSlug || matchesTopic || matchesTag || matchesCompany;
       }
       return true;
     });
@@ -710,6 +765,62 @@ function ProblemsPage() {
               >
                 Playground
               </Link>
+
+              {/* Admin Menu (Visible only to admin users) */}
+              {user?.role === 'admin' && (
+                <div className="relative" ref={adminDropdownRef}>
+                  <button
+                    type="button"
+                    id="problems-admin-nav-button"
+                    onClick={() => setAdminDropdownOpen((prev) => !prev)}
+                    aria-expanded={adminDropdownOpen}
+                    aria-haspopup="menu"
+                    className="flex items-center gap-1.5 py-4 transition cursor-pointer text-[13px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span>Admin</span>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                      Pro
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
+                        adminDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {adminDropdownOpen && (
+                    <div
+                      role="menu"
+                      aria-orientation="vertical"
+                      aria-labelledby="problems-admin-nav-button"
+                      className="absolute left-0 mt-1 w-52 bg-white/98 dark:bg-slate-900/98 backdrop-blur-md rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/60 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none"
+                    >
+                      <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Problem Controls
+                      </div>
+                      <Link
+                        to="/admin/create"
+                        role="menuitem"
+                        onClick={() => setAdminDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                      >
+                        <PlusCircle className="w-4 h-4 text-blue-500 shrink-0" />
+                        <span>Create Problem</span>
+                      </Link>
+                      <Link
+                        to="/admin/update"
+                        role="menuitem"
+                        onClick={() => setAdminDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                      >
+                        <Sliders className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span>Manage Problems</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
             </nav>
           </div>
 
@@ -760,6 +871,65 @@ function ProblemsPage() {
 
       {/* 2. MAIN PROBLEMS DIRECTORY */}
       <main className="max-w-[1360px] mx-auto px-4 sm:px-6 py-6 w-full flex-1">
+        {/* Daily Challenge Banner */}
+        {dailyChallenge && (
+          <div className="mb-6 relative overflow-hidden bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-blue-500/10 dark:from-orange-950/30 dark:via-slate-900 dark:to-blue-950/30 rounded-2xl border border-orange-500/20 dark:border-orange-500/30 p-5 sm:p-6 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-xs">
+                    <Flame className="w-3.5 h-3.5 fill-white" />
+                    Daily Challenge
+                  </span>
+                  {dailyDate && (
+                    <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
+                      {dailyDate}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-baseline gap-3">
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {dailyChallenge.problemNumber ? `#${dailyChallenge.problemNumber}. ` : ''}
+                    {dailyChallenge.title}
+                  </h2>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border capitalize ${
+                    (dailyChallenge.difficulty || '').toLowerCase() === 'easy'
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                      : (dailyChallenge.difficulty || '').toLowerCase() === 'medium'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                  }`}>
+                    {dailyChallenge.difficulty}
+                  </span>
+
+                  {normalizeTags(dailyChallenge.tags).map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                    >
+                      {tagLabel(t)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center self-start md:self-center">
+                <Link
+                  to={`/problems/${dailyChallenge.slug || dailyChallenge._id}`}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-md shadow-orange-600/20 hover:scale-105 active:scale-95 transition-all duration-150 cursor-pointer"
+                >
+                  <span>Solve Challenge</span>
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
           {/* ============================================================ */}
           {/* TITLE BAR                                                    */}
@@ -1364,34 +1534,52 @@ function ProblemsPage() {
           )}
 
           {/* Pagination Controls */}
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              Showing page <span className="font-bold text-slate-800 dark:text-slate-200">{page}</span> of{' '}
-              <span className="font-bold text-slate-800 dark:text-slate-200">{totalPages || 1}</span> ({totalProblems} {totalProblems === 1 ? 'problem' : 'problems'})
-            </div>
+          {totalProblems > 0 && (
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Showing page <span className="font-bold text-slate-800 dark:text-slate-200">{page}</span> of{' '}
+                <span className="font-bold text-slate-800 dark:text-slate-200">{totalPages || 1}</span> ({totalProblems} {totalProblems === 1 ? 'problem' : 'problems'})
+              </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                disabled={page <= 1 || loading}
-                className="px-3.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
-              >
-                Previous
-              </button>
-              <span className="text-xs font-mono font-bold px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-lg">
-                Page {page} of {totalPages || 1}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((prev) => Math.min(prev + 1, totalPages || 1))}
-                disabled={page >= (totalPages || 1) || loading}
-                className="px-3.5 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
-              >
-                Next
-              </button>
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={page <= 1 || loading}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                >
+                  Previous
+                </button>
+
+                {/* Page numbers */}
+                {totalPages > 1 &&
+                  Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => (
+                    <button
+                      key={pNum}
+                      type="button"
+                      onClick={() => setPage(pNum)}
+                      disabled={loading}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition flex items-center justify-center cursor-pointer ${
+                        pNum === page
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                      }`}
+                    >
+                      {pNum}
+                    </button>
+                  ))}
+
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.min(prev + 1, totalPages || 1))}
+                  disabled={page >= (totalPages || 1) || loading}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
 

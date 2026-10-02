@@ -1,0 +1,106 @@
+services:
+  # ==========================================
+  # 1. MongoDB Database Service (Optional local persistence)
+  # ==========================================
+  mongo:
+    image: mongo:7
+    container_name: codequest-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================
+  # 2. Redis Cache & Fast Read Service
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: codequest-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # 3. Node.js Express Backend API Service
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codequest-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_CONNECT_STRING=${DB_CONNECT_STRING:-mongodb://mongo:27017/Leetcode}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - JWT_KEY=${JWT_KEY:-codequest_production_jwt_secret_key_2026}
+      - JWT_EXPIRES_IN_SECONDS=${JWT_EXPIRES_IN_SECONDS:-604800}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost,http://localhost:80,http://localhost:5173}
+      - CLIENT_URL=${CLIENT_URL:-http://localhost}
+      - TRUST_PROXY=1
+      - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
+      - JUDGE0_KEY=${JUDGE0_KEY:-}
+      - GEMINI_KEY=${GEMINI_KEY:-}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
+      - SHOW_FAILED_HIDDEN_TEST_DETAILS=${SHOW_FAILED_HIDDEN_TEST_DETAILS:-true}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health | grep -q '\"status\":\"healthy\"' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ==========================================
+  # 4. React + Vite Nginx Frontend Service
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
+    container_name: codequest-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/nginx-health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mongo_data:
+    driver: local
+  redis_data:
+    driver: local

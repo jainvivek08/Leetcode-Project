@@ -10,6 +10,8 @@ function Homepage() {
   const { user } = useSelector((state) => state.auth);
   const [problems, setProblems] = useState([]);
   const [solvedProblems, setSolvedProblems] = useState([]);
+  const [dailyChallenge, setDailyChallenge] = useState(null);
+  const [dailyDate, setDailyDate] = useState('');
   const [filters, setFilters] = useState({
     difficulty: 'all',
     tag: 'all',
@@ -17,10 +19,22 @@ function Homepage() {
   });
 
   useEffect(() => {
+    const fetchDailyChallenge = async () => {
+      try {
+        const { data } = await axiosClient.get('/problem/daily-challenge');
+        if (data?.success && data?.problem) {
+          setDailyChallenge(data.problem);
+          setDailyDate(data.date || '');
+        }
+      } catch (error) {
+        console.warn('Could not fetch daily challenge:', error);
+      }
+    };
+
     const fetchProblems = async () => {
       try {
         const { data } = await axiosClient.get('/problem/getAllProblem');
-        setProblems(data);
+        setProblems(Array.isArray(data) ? data : (data?.problems || []));
       } catch (error) {
         console.error('Error fetching problems:', error);
       }
@@ -35,6 +49,7 @@ function Homepage() {
       }
     };
 
+    fetchDailyChallenge();
     fetchProblems();
     if (user) fetchSolvedProblems();
   }, [user]);
@@ -77,6 +92,50 @@ function Homepage() {
 
       {/* Main Content */}
       <div className="container mx-auto p-4">
+        {/* Daily Challenge Card */}
+        {dailyChallenge && (
+          <div className="card bg-base-100 shadow-xl border border-primary/20 mb-6 overflow-hidden bg-gradient-to-r from-primary/5 via-base-100 to-secondary/5">
+            <div className="card-body p-5 sm:p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="badge badge-primary gap-1 font-bold text-xs py-2 px-3 shadow-xs">
+                      ⚡ Daily Challenge
+                    </span>
+                    {dailyDate && (
+                      <span className="text-xs text-base-content/60 font-mono">
+                        {dailyDate}
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-xl font-extrabold tracking-tight text-base-content">
+                    {dailyChallenge.problemNumber ? `#${dailyChallenge.problemNumber}. ` : ''}
+                    {dailyChallenge.title}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className={`badge ${getDifficultyBadgeColor(dailyChallenge.difficulty)} font-semibold capitalize`}>
+                      {dailyChallenge.difficulty}
+                    </span>
+                    {normalizeTags(dailyChallenge.tags).map((t) => (
+                      <span key={t} className="badge badge-outline text-xs">
+                        {tagLabel(t)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <NavLink
+                    to={`/problems/${dailyChallenge.slug || dailyChallenge._id}`}
+                    className="btn btn-primary gap-2 w-full md:w-auto shadow-md hover:scale-105 transition-transform font-bold"
+                  >
+                    Solve Challenge →
+                  </NavLink>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6">
           {/* New Status Filter */}

@@ -9,9 +9,15 @@ const adminMiddleware = async (req,res,next)=>{
             return res.status(401).send("Authentication required: Token missing");
         }
 
-        const isBlocked = await redisClient.exists(`token:${token}`);
-        if(isBlocked){
-            return res.status(401).send("Token revoked or expired");
+        if (redisClient.isOpen) {
+            try {
+                const isBlocked = await redisClient.exists(`token:${token}`);
+                if(isBlocked){
+                    return res.status(401).send("Token revoked or expired");
+                }
+            } catch (redisErr) {
+                console.warn("Redis check warning in adminMiddleware:", redisErr.message);
+            }
         }
 
         let payload;
@@ -26,17 +32,13 @@ const adminMiddleware = async (req,res,next)=>{
             return res.status(401).send("Invalid token payload");
         }
 
-        const result = await User.findById(_id);
-        if(!result){
-            return res.status(401).send("User does not exist");
+        req.result = req.result || { _id };
+        const user = await User.findById(req.result._id).select('role');
+        if (!user || user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied. Admin rights required.' });
         }
 
-        // Strictly check role from database
-        if(result.role !== 'admin'){
-            return res.status(403).send("Access denied: Admin role required");
-        }
-
-        req.result = result;
+        req.result = user;
         next();
     }
     catch(err){

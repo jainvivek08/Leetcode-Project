@@ -33,15 +33,18 @@ import {
   ChevronUp,
   AlertCircle,
   Copy,
+  MessageSquare,
 } from 'lucide-react';
 import axiosClient, { getApiErrorMessage } from '../utils/axiosClient';
 import { logoutUser } from '../authSlice';
 import SubmissionHistory from '../components/SubmissionHistory';
 import ChatAi from '../components/ChatAi';
 import Editorial from '../components/Editorial';
+import ProblemDiscussion from '../components/discussion/ProblemDiscussion';
 import ProfileDropdown from '../components/profile/ProfileDropdown';
 import AuthPromptModal from '../components/AuthPromptModal';
 import { normalizeTags, tagLabel } from '../utils/tags';
+import FailedTestCaseCard from '../components/FailedTestCaseCard';
 
 /**
  * Fallback Default Problem Specification (LeetCode #1614: Maximum Nesting Depth of the Parentheses)
@@ -184,6 +187,103 @@ const LANG_CONFIG = {
   cpp: { label: 'C++', monaco: 'cpp', ext: 'cpp' },
   java: { label: 'Java', monaco: 'java', ext: 'java' },
   python3: { label: 'Python3', monaco: 'python', ext: 'py' },
+};
+
+/**
+ * Helper to compute possible localStorage keys for drafts
+ * Format: codequest_draft_${problemIdOrSlug}_${language}
+ */
+const getDraftKeys = (problem, routeId, langKey) => {
+  const ids = [];
+  if (problem?.slug) ids.push(problem.slug);
+  if (problem?._id && String(problem._id) !== problem?.slug) ids.push(String(problem._id));
+  if (routeId && !ids.includes(routeId)) ids.push(routeId);
+  if (ids.length === 0) ids.push('default-1614');
+
+  const langVariants = [];
+  if (langKey) {
+    langVariants.push(langKey);
+    const label = LANG_CONFIG[langKey]?.label;
+    if (label && !langVariants.includes(label)) langVariants.push(label);
+  }
+
+  const keys = [];
+  for (const id of ids) {
+    for (const lv of langVariants) {
+      keys.push(`codequest_draft_${id}_${lv}`);
+    }
+  }
+  return keys;
+};
+
+const loadSavedDraft = (problem, routeId, langKey) => {
+  try {
+    const keys = getDraftKeys(problem, routeId, langKey);
+    for (const k of keys) {
+      const val = localStorage.getItem(k);
+      if (val !== null && val !== undefined) {
+        return val;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load draft from localStorage:', err);
+  }
+  return null;
+};
+
+const saveDraftToStorage = (problem, routeId, langKey, codeContent) => {
+  if (codeContent === undefined || codeContent === null) return;
+  try {
+    const primaryId = problem?.slug || problem?._id || routeId || 'default-1614';
+    const label = LANG_CONFIG[langKey]?.label || langKey;
+
+    localStorage.setItem(`codequest_draft_${primaryId}_${langKey}`, codeContent);
+    if (label && label !== langKey) {
+      localStorage.setItem(`codequest_draft_${primaryId}_${label}`, codeContent);
+    }
+
+    if (problem?.slug && problem?._id && String(problem._id) !== problem.slug) {
+      localStorage.setItem(`codequest_draft_${problem._id}_${langKey}`, codeContent);
+      if (label && label !== langKey) {
+        localStorage.setItem(`codequest_draft_${problem._id}_${label}`, codeContent);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to save draft to localStorage:', err);
+  }
+};
+
+const clearDraftFromStorage = (problem, routeId, langKey) => {
+  try {
+    const keys = getDraftKeys(problem, routeId, langKey);
+    for (const k of keys) {
+      localStorage.removeItem(k);
+    }
+  } catch (err) {
+    console.warn('Failed to clear draft from localStorage:', err);
+  }
+};
+
+const getStarterCode = (prob, lang) => {
+  if (!prob) return '';
+  const langLabel = LANG_CONFIG[lang]?.label || lang || 'JavaScript';
+  const found = prob?.startCode?.find(
+    (sc) =>
+      sc.language?.toLowerCase() === lang.toLowerCase() ||
+      sc.language?.toLowerCase() === langLabel.toLowerCase()
+  );
+  if (found && found.initialCode) {
+    return found.initialCode;
+  }
+  if (lang === 'javascript') {
+    return `/**\n * Solution\n */\nfunction solve(input) {\n    // Write your code here\n    return 0;\n}`;
+  } else if (lang === 'cpp') {
+    return `#include <iostream>\n#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int solve() {\n        return 0;\n    }\n};`;
+  } else if (lang === 'java') {
+    return `class Solution {\n    public int solve() {\n        // Write code here\n        return 0;\n    }\n}`;
+  } else {
+    return `class Solution:\n    def solve(self) -> int:\n        # Write code here\n        return 0`;
+  }
 };
 
 /**
@@ -364,7 +464,8 @@ function ProblemRightPaneSkeleton() {
  * Full-screen Split-Pane Coding Workspace inspired by LeetCode's modern dark IDE.
  */
 function SolveProblemPage() {
-  const { problemId } = useParams();
+  const params = useParams();
+  const routeIdentifier = params.slug || params.id || params.problemId;
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
@@ -412,12 +513,45 @@ function SolveProblemPage() {
   const [code, setCode] = useState('');
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const editorRef = useRef(null);
+  const codeRef = useRef(code);
+  const selectedLangRef = useRef(selectedLang);
+  const saveTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
+
+  useEffect(() => {
+    selectedLangRef.current = selectedLang;
+  }, [selectedLang]);
+
+  // Ensure un-debounced changes are saved before navigating or refreshing
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (codeRef.current !== undefined && codeRef.current !== null) {
+        saveDraftToStorage(problem, routeIdentifier, selectedLang, codeRef.current);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      if (codeRef.current !== undefined && codeRef.current !== null) {
+        saveDraftToStorage(problem, routeIdentifier, selectedLang, codeRef.current);
+      }
+    };
+  }, [problem, routeIdentifier, selectedLang]);
 
   // Bottom Console / Testcase Drawer
   const [consoleOpen, setConsoleOpen] = useState(true);
-  const [consoleTab, setConsoleTab] = useState('testcase'); // 'testcase' | 'result'
+  const [consoleTab, setConsoleTab] = useState('testcase'); // 'testcase' | 'custom' | 'result'
   const [selectedCaseIdx, setSelectedCaseIdx] = useState(0);
+  const [customInput, setCustomInput] = useState('');
 
   // Execution states
   const [isRunning, setIsRunning] = useState(false);
@@ -442,18 +576,26 @@ function SolveProblemPage() {
 
     const fetchProblem = async () => {
       try {
-        if (!problemId || problemId === 'default-1614') {
+        const currentLang = selectedLangRef.current || 'javascript';
+
+        if (!routeIdentifier || routeIdentifier === 'default-1614') {
           if (!isMounted) return;
           setProblem(DEFAULT_PROBLEM);
-          loadStarterCode(DEFAULT_PROBLEM, selectedLang);
+          const savedDraft = loadSavedDraft(DEFAULT_PROBLEM, routeIdentifier, currentLang);
+          const initial = savedDraft !== null && savedDraft !== undefined
+            ? savedDraft
+            : getStarterCode(DEFAULT_PROBLEM, currentLang);
+          setCode(initial);
+          codeRef.current = initial;
+          setCustomInput(DEFAULT_PROBLEM.visibleTestCases?.[0]?.input || '');
           setLoadingProblem(false);
           return;
         }
 
-        const isObjectId = /^[0-9a-fA-F]{24}$/.test(problemId);
+        const isObjectId = /^[0-9a-fA-F]{24}$/.test(routeIdentifier);
         const endpoint = isObjectId
-          ? `/problem/problemById/${problemId}`
-          : `/problem/bySlug/${problemId}`;
+          ? `/problem/problemById/${routeIdentifier}`
+          : `/problem/bySlug/${routeIdentifier}`;
 
         const response = await axiosClient.get(endpoint);
         if (!isMounted) return;
@@ -467,9 +609,9 @@ function SolveProblemPage() {
             _id: apiProblem._id,
             problemNumber: apiProblem.problemNumber,
             slug: apiProblem.slug,
-            constraints: apiProblem.constraints || [],
-            timeLimit: apiProblem.timeLimit || 2,
-            memoryLimit: apiProblem.memoryLimit || 256,
+            constraints: apiProblem.constraints != null ? apiProblem.constraints : '',
+            timeLimit: apiProblem.timeLimit != null ? apiProblem.timeLimit : 2000,
+            memoryLimit: apiProblem.memoryLimit != null ? apiProblem.memoryLimit : 256000,
             tags: cleanTags,
             topics: cleanTags.length > 0 ? cleanTags.map(tagLabel) : ['Algorithms', 'Data Structures'],
             companies: apiProblem.companies || ['Amazon', 'Google', 'Microsoft', 'Bloomberg'],
@@ -478,7 +620,13 @@ function SolveProblemPage() {
               'Think about the optimal data structure, frequency counting, or two-pointer approach.',
           };
           setProblem(formattedProblem);
-          loadStarterCode(formattedProblem, selectedLang);
+          const savedDraft = loadSavedDraft(formattedProblem, routeIdentifier, currentLang);
+          const initial = savedDraft !== null && savedDraft !== undefined
+            ? savedDraft
+            : getStarterCode(formattedProblem, currentLang);
+          setCode(initial);
+          codeRef.current = initial;
+          setCustomInput(formattedProblem.visibleTestCases?.[0]?.input || '');
 
           // Check if user solved this problem
           try {
@@ -493,13 +641,26 @@ function SolveProblemPage() {
           }
         } else {
           setProblem(DEFAULT_PROBLEM);
-          loadStarterCode(DEFAULT_PROBLEM, selectedLang);
+          const savedDraft = loadSavedDraft(DEFAULT_PROBLEM, routeIdentifier, currentLang);
+          const initial = savedDraft !== null && savedDraft !== undefined
+            ? savedDraft
+            : getStarterCode(DEFAULT_PROBLEM, currentLang);
+          setCode(initial);
+          codeRef.current = initial;
+          setCustomInput(DEFAULT_PROBLEM.visibleTestCases?.[0]?.input || '');
         }
       } catch (err) {
         console.warn('Could not fetch problem from API, fallback to default workspace:', err);
         if (isMounted) {
+          const currentLang = selectedLangRef.current || 'javascript';
           setProblem(DEFAULT_PROBLEM);
-          loadStarterCode(DEFAULT_PROBLEM, selectedLang);
+          const savedDraft = loadSavedDraft(DEFAULT_PROBLEM, routeIdentifier, currentLang);
+          const initial = savedDraft !== null && savedDraft !== undefined
+            ? savedDraft
+            : getStarterCode(DEFAULT_PROBLEM, currentLang);
+          setCode(initial);
+          codeRef.current = initial;
+          setCustomInput(DEFAULT_PROBLEM.visibleTestCases?.[0]?.input || '');
         }
       } finally {
         if (isMounted) {
@@ -513,51 +674,69 @@ function SolveProblemPage() {
     return () => {
       isMounted = false;
     };
-  }, [problemId, selectedLang]);
+  }, [routeIdentifier]);
 
-  // Load starter code according to selected language
-  const loadStarterCode = (prob, lang) => {
-    if (!prob) {
-      setCode('');
+  // Handle code changes from Monaco editor with debounced auto-save
+  const handleCodeChange = (newVal) => {
+    const val = newVal || '';
+    setCode(val);
+    codeRef.current = val;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    setIsSavingDraft(true);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveDraftToStorage(problem, routeIdentifier, selectedLang, val);
+      setIsSavingDraft(false);
+    }, 400);
+  };
+
+  // Switch Language with instant auto-save and draft loading
+  const handleLanguageChange = (langKey) => {
+    if (langKey === selectedLang) {
+      setIsLangDropdownOpen(false);
       return;
     }
-    const langLabel = LANG_CONFIG[lang]?.label || 'JavaScript';
-    const foundCode = prob?.startCode?.find(
-      (sc) => sc.language?.toLowerCase() === langLabel.toLowerCase()
-    );
 
-    if (foundCode && foundCode.initialCode) {
-      setCode(foundCode.initialCode);
-    } else {
-      // Default boilerplates
-      if (lang === 'javascript') {
-        setCode(`/**\n * Solution\n */\nfunction solve(input) {\n    // Write your code here\n    return 0;\n}`);
-      } else if (lang === 'cpp') {
-        setCode(`#include <iostream>\n#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int solve() {\n        return 0;\n    }\n};`);
-      } else if (lang === 'java') {
-        setCode(`class Solution {\n    public int solve() {\n        // Write code here\n        return 0;\n    }\n}`);
-      } else {
-        setCode(`class Solution:\n    def solve(self) -> int:\n        # Write code here\n        return 0`);
-      }
+    // 1. Immediately persist current code before switching
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      setIsSavingDraft(false);
     }
-  };
+    if (codeRef.current !== undefined && codeRef.current !== null) {
+      saveDraftToStorage(problem, routeIdentifier, selectedLang, codeRef.current);
+    }
 
-  // Switch Language
-  const handleLanguageChange = (langKey) => {
+    // 2. Switch language
     setSelectedLang(langKey);
     setIsLangDropdownOpen(false);
-    if (problem) {
-      loadStarterCode(problem, langKey);
-    }
-    triggerToast(`Switched language to ${LANG_CONFIG[langKey].label}`, '⚡');
+
+    // 3. Load saved draft for new language, or fallback to starter code
+    const draft = loadSavedDraft(problem, routeIdentifier, langKey);
+    const nextCode = draft !== null && draft !== undefined ? draft : getStarterCode(problem, langKey);
+    setCode(nextCode);
+    codeRef.current = nextCode;
+
+    triggerToast(`Switched language to ${LANG_CONFIG[langKey]?.label || langKey}`, '⚡');
   };
 
-  // Reset Code
-  const handleResetCode = () => {
-    if (problem) {
-      loadStarterCode(problem, selectedLang);
-      triggerToast('Code reset to default starter template', '🔄');
+  // Reset Code to default template
+  const handleResetClick = () => {
+    setShowResetModal(true);
+  };
+
+  const handleConfirmReset = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      setIsSavingDraft(false);
     }
+    clearDraftFromStorage(problem, routeIdentifier, selectedLang);
+    const defaultTemplate = getStarterCode(problem, selectedLang);
+    setCode(defaultTemplate);
+    codeRef.current = defaultTemplate;
+    setShowResetModal(false);
+    triggerToast(`Reset ${LANG_CONFIG[selectedLang]?.label || selectedLang} to default template`, '🔄');
   };
 
   // Format Code Helper
@@ -600,11 +779,12 @@ function SolveProblemPage() {
 
     setIsRunning(true);
     setRunResult(null);
+    setSubmitResult(null);
     setConsoleOpen(true);
     setConsoleTab('result');
 
     try {
-      const targetProblemId = problem?._id || problemId;
+      const targetProblemId = problem?._id || routeIdentifier;
       if (targetProblemId && targetProblemId !== 'default-1614') {
         const response = await axiosClient.post(`/submission/run/${targetProblemId}`, {
           code,
@@ -657,6 +837,96 @@ function SolveProblemPage() {
     }
   };
 
+  // 2b. Handle Custom Input Execution
+  const handleRunCustom = async () => {
+    if (!user) {
+      triggerAuthModal(
+        'Sign in to Run & Submit Code',
+        'Create a free account or log in to compile solutions, test against edge cases, and save your practice streak.'
+      );
+      return;
+    }
+
+    if (!problem) return;
+
+    if (code && code.length > 64000) {
+      triggerToast('Code is too large (max 64 KB)', '⚠️');
+      setRunResult({
+        success: false,
+        mode: 'custom',
+        status: 'Error',
+        errorMessage: 'Code is too large (max 64 KB)',
+      });
+      setSubmitResult(null);
+      setConsoleOpen(true);
+      setConsoleTab('result');
+      return;
+    }
+
+    if (typeof customInput !== 'string') {
+      triggerToast('Custom input must be a string', '⚠️');
+      return;
+    }
+
+    if (customInput.length > 10000) {
+      triggerToast('Custom input cannot exceed 10000 characters', '⚠️');
+      return;
+    }
+
+    setIsRunning(true);
+    setRunResult(null);
+    setSubmitResult(null);
+    setConsoleOpen(true);
+    setConsoleTab('result');
+
+    try {
+      const targetProblemId = problem?._id || routeIdentifier;
+      if (targetProblemId && targetProblemId !== 'default-1614') {
+        const response = await axiosClient.post(`/submission/run/${targetProblemId}`, {
+          code,
+          language: selectedLang,
+          customInput,
+        });
+        setRunResult(response.data);
+        if (response.data?.success || response.data?.status === 'accepted') {
+          triggerToast('Custom run completed successfully! ✨', '✓');
+        } else {
+          triggerToast('Custom run completed with errors', '⚠');
+        }
+      } else {
+        // Fallback simulation
+        await new Promise((r) => setTimeout(r, 650));
+        setRunResult({
+          success: true,
+          mode: 'custom',
+          status: 'accepted',
+          stdout: customInput ? `Echo: ${customInput}` : '(No output)',
+          stderr: '',
+          errorMessage: '',
+          runtime: 3,
+          memory: 3800,
+        });
+        triggerToast('Custom run completed successfully! ✨', '✓');
+      }
+    } catch (err) {
+      console.error('Run custom code error:', err);
+      const errMsg = getApiErrorMessage(err);
+      setRunResult({
+        success: false,
+        mode: 'custom',
+        status: 'Error',
+        errorMessage: errMsg,
+        stdout: '',
+        stderr: errMsg,
+        runtime: 0,
+        memory: 0,
+      });
+      triggerToast(errMsg, '⚠');
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   // 3. Handle Submit
   const handleSubmitCode = async () => {
     if (!user) {
@@ -682,11 +952,12 @@ function SolveProblemPage() {
 
     setIsSubmitting(true);
     setSubmitResult(null);
+    setRunResult(null);
     setConsoleOpen(true);
     setConsoleTab('result');
 
     try {
-      const targetProblemId = problem?._id || problemId;
+      const targetProblemId = problem?._id || routeIdentifier;
       if (targetProblemId && targetProblemId !== 'default-1614') {
         const response = await axiosClient.post(`/submission/submit/${targetProblemId}`, {
           code,
@@ -871,6 +1142,19 @@ function SolveProblemPage() {
             >
               <History className="w-3.5 h-3.5 text-purple-400" />
               <span>Submissions</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveLeftTab('discussions')}
+              className={`h-full px-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer whitespace-nowrap ${
+                activeLeftTab === 'discussions'
+                  ? 'border-blue-500 text-white font-bold bg-[#26262b]'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-[#242429]'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Discussions</span>
             </button>
 
             <button
@@ -1062,24 +1346,42 @@ function SolveProblemPage() {
                 </div>
 
                 {/* Constraints Section */}
-                {Array.isArray(problem.constraints) && problem.constraints.length > 0 && (
-                  <div className="space-y-2 pt-2 border-t border-zinc-800/80">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                {Boolean(
+                  problem.constraints &&
+                  (Array.isArray(problem.constraints)
+                    ? problem.constraints.length > 0
+                    : typeof problem.constraints === 'string' && problem.constraints.trim().length > 0)
+                ) && (
+                  <div className="space-y-2 pt-3 border-t border-zinc-800/80">
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
                       Constraints:
                     </h3>
-                    <ul className="list-disc list-inside space-y-1 text-xs text-zinc-400 font-mono">
-                      {problem.constraints.map((c, i) => (
-                        <li key={i}>{c}</li>
-                      ))}
+                    <ul className="list-disc list-inside space-y-1.5 text-xs text-zinc-300 font-mono bg-zinc-900/60 rounded-lg p-3 border border-zinc-800/60">
+                      {(Array.isArray(problem.constraints)
+                        ? problem.constraints
+                        : problem.constraints.split('\n')
+                      )
+                        .map((c) => String(c).trim())
+                        .filter(Boolean)
+                        .map((c, i) => (
+                          <li key={i} className="leading-relaxed">
+                            <code className="text-amber-300/90 font-mono text-[12px]">{c}</code>
+                          </li>
+                        ))}
                     </ul>
                   </div>
                 )}
 
-                {/* Per-problem Time and Memory Limits */}
-                <div className="text-[11px] font-mono text-zinc-500 pt-2 border-t border-zinc-800/60 flex items-center gap-3">
-                  <span>Time limit: {problem.timeLimit || 2}s</span>
-                  <span>|</span>
-                  <span>Memory: {problem.memoryLimit || 256} MB</span>
+                {/* Per-problem Time and Memory Limits Chips */}
+                <div className="pt-3 border-t border-zinc-800/60 flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono bg-zinc-800/70 border border-zinc-700/60 text-zinc-300 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                    <span>Time Limit: {problem.timeLimit >= 100 ? `${problem.timeLimit / 1000}s` : `${problem.timeLimit || 2}s`}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono bg-zinc-800/70 border border-zinc-700/60 text-zinc-300 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    <span>Memory: {problem.memoryLimit > 1024 ? `${Math.round(problem.memoryLimit / 1000)} MB` : `${problem.memoryLimit || 256} MB`}</span>
+                  </span>
                 </div>
               </div>
             )}
@@ -1198,8 +1500,19 @@ function SolveProblemPage() {
                     <span>Submission History</span>
                   </h2>
                 </div>
-                <SubmissionHistory problemId={problem._id || problemId} />
+                <SubmissionHistory problemId={problem?._id || routeIdentifier} />
               </div>
+            )}
+
+            {/* TAB 5: DISCUSSIONS & COMMUNITY SOLUTIONS */}
+            {activeLeftTab === 'discussions' && (
+              <ProblemDiscussion
+                problemId={problem?._id || routeIdentifier}
+                user={user}
+                onRequireAuth={(customTitle, customSub) =>
+                  triggerAuthModal(customTitle, customSub)
+                }
+              />
             )}
 
                 {/* TAB 5: CHAT AI */}
@@ -1266,9 +1579,16 @@ function SolveProblemPage() {
               </div>
 
               {/* Auto-save indicator */}
-              <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Auto</span>
+              <div
+                className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-mono select-none"
+                title="Drafts auto-saved to localStorage"
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isSavingDraft ? 'bg-amber-400 animate-ping' : 'bg-emerald-500 animate-pulse'
+                  }`}
+                ></span>
+                <span>{isSavingDraft ? 'Saving...' : 'Auto-saved'}</span>
               </div>
             </div>
 
@@ -1278,23 +1598,24 @@ function SolveProblemPage() {
                 type="button"
                 onClick={handleFormatCode}
                 title="Format Code"
-                className="p-1.5 text-zinc-400 hover:text-white rounded hover:bg-zinc-800 transition"
+                className="p-1.5 text-zinc-400 hover:text-white rounded hover:bg-zinc-800 transition cursor-pointer"
               >
                 <Wand2 className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                onClick={handleResetCode}
-                title="Reset Code Template"
-                className="p-1.5 text-zinc-400 hover:text-white rounded hover:bg-zinc-800 transition"
+                onClick={handleResetClick}
+                title="Reset code to default template"
+                className="px-2 py-1 text-zinc-400 hover:text-amber-400 rounded hover:bg-zinc-800 transition flex items-center gap-1 text-xs cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline font-medium">Reset</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsFullScreen((prev) => !prev)}
                 title="Toggle Fullscreen"
-                className="p-1.5 text-zinc-400 hover:text-white rounded hover:bg-zinc-800 transition"
+                className="p-1.5 text-zinc-400 hover:text-white rounded hover:bg-zinc-800 transition cursor-pointer"
               >
                 {isFullScreen ? (
                   <Minimize2 className="w-3.5 h-3.5" />
@@ -1311,7 +1632,7 @@ function SolveProblemPage() {
               height="100%"
               language={LANG_CONFIG[selectedLang]?.monaco || 'javascript'}
               value={code}
-              onChange={(val) => setCode(val || '')}
+              onChange={handleCodeChange}
               onMount={(editor) => {
                 editorRef.current = editor;
               }}
@@ -1356,6 +1677,19 @@ function SolveProblemPage() {
                   >
                     <Terminal className="w-3 h-3 text-zinc-400" />
                     <span>Testcase</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setConsoleTab('custom')}
+                    className={`px-3 py-1 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition cursor-pointer ${
+                      consoleTab === 'custom'
+                        ? 'border-blue-500 text-white font-bold'
+                        : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <Terminal className="w-3 h-3 text-purple-400" />
+                    <span>Custom Input</span>
                   </button>
 
                   <button
@@ -1418,13 +1752,57 @@ function SolveProblemPage() {
                   </div>
                 )}
 
-                {/* TAB B: RESULTS */}
+                {/* TAB B: CUSTOM INPUT */}
+                {consoleTab === 'custom' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] text-zinc-400 font-semibold block">
+                        Custom Stdin:
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {customInput.length > 8000 && (
+                          <span
+                            className={`text-[11px] font-mono ${
+                              customInput.length > 10000 ? 'text-rose-400 font-bold' : 'text-amber-400'
+                            }`}
+                          >
+                            {customInput.length} / 10000
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleRunCustom}
+                          disabled={isRunning || isSubmitting}
+                          className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-semibold rounded-md shadow-xs transition cursor-pointer disabled:opacity-50"
+                        >
+                          {isRunning ? (
+                            <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
+                          ) : (
+                            <Play className="w-3 h-3 fill-current text-white" />
+                          )}
+                          <span>Run Custom</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <textarea
+                      value={customInput}
+                      onChange={(e) => setCustomInput(e.target.value)}
+                      maxLength={10000}
+                      rows={4}
+                      placeholder="Enter custom stdin here..."
+                      className="w-full p-2.5 bg-zinc-950/80 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 resize-y"
+                    />
+                  </div>
+                )}
+
+                {/* TAB C: RESULTS */}
                 {consoleTab === 'result' && (
                   <div>
                     {isRunning || isSubmitting ? (
                       <div className="flex items-center gap-2 py-6 justify-center text-zinc-400">
                         <span className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin"></span>
-                        <span>Evaluating test cases on CodeQuest engine...</span>
+                        <span>Evaluating on CodeQuest engine...</span>
                       </div>
                     ) : runResult || submitResult ? (
                       <div className="space-y-3">
@@ -1457,26 +1835,88 @@ function SolveProblemPage() {
                             </span>
                           )}
 
-                          <span className="text-zinc-500 font-sans text-xs">
-                            Runtime:{' '}
-                            <strong className="text-zinc-300">
-                              {runResult?.runtime != null
+                          {(() => {
+                            const isAccepted =
+                              runResult?.status === 'accepted' ||
+                              runResult?.status === 'Accepted' ||
+                              submitResult?.status === 'accepted' ||
+                              submitResult?.status === 'Accepted' ||
+                              (runResult?.success && !runResult?.status) ||
+                              (submitResult?.accepted && !submitResult?.status);
+
+                            const runtimeVal =
+                              runResult?.runtime != null
                                 ? (typeof runResult.runtime === 'number' ? `${runResult.runtime} ms` : runResult.runtime)
                                 : submitResult?.runtime != null
                                 ? (typeof submitResult.runtime === 'number' ? `${submitResult.runtime} ms` : submitResult.runtime)
-                                : '—'}
-                            </strong>
-                          </span>
-                          <span className="text-zinc-500 font-sans text-xs">
-                            Memory:{' '}
-                            <strong className="text-zinc-300">
-                              {runResult?.memory != null
-                                ? (typeof runResult.memory === 'number' ? `${runResult.memory} kB` : runResult.memory)
+                                : '—';
+
+                            const rawRuntimePercentile =
+                              submitResult?.runtimePercentile != null
+                                ? submitResult.runtimePercentile
+                                : runResult?.runtimePercentile != null
+                                ? runResult.runtimePercentile
+                                : null;
+
+                            const runtimePercentileStr =
+                              rawRuntimePercentile != null
+                                ? typeof rawRuntimePercentile === 'string' && rawRuntimePercentile.endsWith('%')
+                                  ? rawRuntimePercentile.slice(0, -1)
+                                  : rawRuntimePercentile
+                                : null;
+
+                            const formatMem = (mem) => {
+                              if (mem == null) return '—';
+                              if (typeof mem === 'string') return mem;
+                              if (mem >= 1024) return `${(mem / 1024).toFixed(1)} MB`;
+                              return `${mem} KB`;
+                            };
+
+                            const memoryVal =
+                              runResult?.memory != null
+                                ? formatMem(runResult.memory)
                                 : submitResult?.memory != null
-                                ? (typeof submitResult.memory === 'number' ? `${submitResult.memory} kB` : submitResult.memory)
-                                : '—'}
-                            </strong>
-                          </span>
+                                ? formatMem(submitResult.memory)
+                                : '—';
+
+                            const rawMemoryPercentile =
+                              submitResult?.memoryPercentile != null
+                                ? submitResult.memoryPercentile
+                                : runResult?.memoryPercentile != null
+                                ? runResult.memoryPercentile
+                                : null;
+
+                            const memoryPercentileStr =
+                              rawMemoryPercentile != null
+                                ? typeof rawMemoryPercentile === 'string' && rawMemoryPercentile.endsWith('%')
+                                  ? rawMemoryPercentile.slice(0, -1)
+                                  : rawMemoryPercentile
+                                : null;
+
+                            return (
+                              <>
+                                <span className="text-zinc-500 font-sans text-xs inline-flex items-center gap-1.5 flex-wrap">
+                                  <span>Runtime:</span>
+                                  <strong className="text-zinc-300">{runtimeVal}</strong>
+                                  {isAccepted && runtimePercentileStr != null && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                      Beats {runtimePercentileStr}%
+                                    </span>
+                                  )}
+                                </span>
+
+                                <span className="text-zinc-500 font-sans text-xs inline-flex items-center gap-1.5 flex-wrap">
+                                  <span>Memory:</span>
+                                  <strong className="text-zinc-300">{memoryVal}</strong>
+                                  {isAccepted && memoryPercentileStr != null && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                      Beats {memoryPercentileStr}%
+                                    </span>
+                                  )}
+                                </span>
+                              </>
+                            );
+                          })()}
                           {submitResult?.passedTestCases != null && submitResult?.totalTestCases != null && (
                             <span className="text-zinc-500 font-sans text-xs">
                               Passed:{' '}
@@ -1487,34 +1927,67 @@ function SolveProblemPage() {
                           )}
                         </div>
 
-                        {/* Error Message Box if errorMessage or error is present */}
-                        {(runResult?.errorMessage || submitResult?.errorMessage || runResult?.error || submitResult?.error) && (
-                          <div className="p-3 bg-rose-950/20 border border-rose-800/40 rounded-xl text-xs text-rose-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-48 leading-relaxed">
-                            {runResult?.errorMessage || submitResult?.errorMessage || runResult?.error || submitResult?.error}
+                        {/* Error Message Box if errorMessage or error is present (and no failedTestCase) */}
+                        {(runResult?.errorMessage || submitResult?.errorMessage || runResult?.error || submitResult?.error) &&
+                          !submitResult?.failedTestCase && (
+                            <div className="p-3 bg-rose-950/20 border border-rose-800/40 rounded-xl text-xs text-rose-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-48 leading-relaxed">
+                              {runResult?.errorMessage || submitResult?.errorMessage || runResult?.error || submitResult?.error}
+                            </div>
+                          )}
+
+                        {/* C1: If submitResult has failedTestCase, show the FailedTestCaseCard */}
+                        {submitResult?.failedTestCase ? (
+                          <FailedTestCaseCard failedTestCase={submitResult.failedTestCase} />
+                        ) : runResult?.mode === 'custom' ? (
+                          /* C2: Custom run output display */
+                          <div className="space-y-2">
+                            {runResult.stdout != null && runResult.stdout !== '' ? (
+                              <div className="space-y-1">
+                                <span className="text-[11px] text-zinc-400 font-medium">Standard Output</span>
+                                <pre className="p-2.5 bg-zinc-950/80 border border-zinc-800/80 rounded-lg text-xs font-mono text-zinc-200 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+                                  {runResult.stdout}
+                                </pre>
+                              </div>
+                            ) : null}
+
+                            {runResult.stderr || runResult.errorMessage ? (
+                              <div className="space-y-1">
+                                <span className="text-[11px] text-zinc-400 font-medium">Standard Error</span>
+                                <pre className="p-2.5 bg-rose-950/20 border border-rose-800/40 rounded-lg text-xs font-mono text-rose-300 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+                                  {runResult.stderr || runResult.errorMessage}
+                                </pre>
+                              </div>
+                            ) : null}
+
+                            {!runResult.stdout && !runResult.stderr && !runResult.errorMessage && (
+                              <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 text-xs italic">
+                                (No output produced)
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          /* Default Cases summary box for standard Run */
+                          <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                              <span>Input:</span>
+                              <span className="text-zinc-200">
+                                {problem.visibleTestCases?.[0]?.input || 's = "(1+(2*3)+((8)/4))+1"'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                              <span>Output:</span>
+                              <span className="text-emerald-400 font-bold">
+                                {problem.visibleTestCases?.[0]?.output || '3'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                              <span>Expected:</span>
+                              <span className="text-zinc-300">
+                                {problem.visibleTestCases?.[0]?.output || '3'}
+                              </span>
+                            </div>
                           </div>
                         )}
-
-                        {/* Cases summary box */}
-                        <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg space-y-1.5">
-                          <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                            <span>Input:</span>
-                            <span className="text-zinc-200">
-                              {problem.visibleTestCases?.[0]?.input || 's = "(1+(2*3)+((8)/4))+1"'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                            <span>Output:</span>
-                            <span className="text-emerald-400 font-bold">
-                              {problem.visibleTestCases?.[0]?.output || '3'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                            <span>Expected:</span>
-                            <span className="text-zinc-300">
-                              {problem.visibleTestCases?.[0]?.output || '3'}
-                            </span>
-                          </div>
-                        </div>
                       </div>
                     ) : (
                       <div className="py-6 text-center text-zinc-500 text-xs">
@@ -1579,6 +2052,46 @@ function SolveProblemPage() {
       )}
     </div>
   </div>
+
+      {/* ============================================================ */}
+      {/* 2.5 RESET CONFIRMATION MODAL                                 */}
+      {/* ============================================================ */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 select-none">
+          <div className="bg-[#1c1c1f] border border-zinc-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Reset to Default Template</h3>
+                <p className="text-xs text-zinc-400">
+                  Target Language: <span className="font-semibold text-zinc-200">{LANG_CONFIG[selectedLang]?.label || selectedLang}</span>
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-zinc-300 leading-relaxed">
+              Reset code to default template? Your unsaved draft for this language will be cleared.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 transition shadow-sm cursor-pointer"
+              >
+                Reset Code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* 3. TOAST NOTIFICATION                                        */}

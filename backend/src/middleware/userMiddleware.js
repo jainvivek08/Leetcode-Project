@@ -25,11 +25,16 @@ const userMiddleware = async (req,res,next)=>{
         }
 
         // Redis ke blockList mein persent toh nahi hai
-
-        const IsBlocked = await redisClient.exists(`token:${token}`);
-
-        if(IsBlocked)
-            throw new Error("Invalid Token");
+        if (redisClient.isOpen) {
+            try {
+                const IsBlocked = await redisClient.exists(`token:${token}`);
+                if (IsBlocked)
+                    throw new Error("Invalid Token");
+            } catch (redisErr) {
+                if (redisErr.message === "Invalid Token") throw redisErr;
+                console.warn("Redis check warning in userMiddleware:", redisErr.message);
+            }
+        }
 
         req.result = result;
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Palette, Settings, LogOut, Sun, Moon } from 'lucide-react';
+import { User, Palette, Settings, LogOut, Sun, Moon, Shield, PlusCircle, Sliders } from 'lucide-react';
 import { useTheme } from '../../utils/theme';
 
 /**
@@ -235,6 +235,44 @@ export function ProfileDropdown({
               <Settings className="w-4 h-4 text-slate-400 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors shrink-0" />
               <span>Settings</span>
             </button>
+
+            {/* Admin Controls (Visible only to admin users) */}
+            {user?.role === 'admin' && (
+              <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800 space-y-0.5">
+                <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                  <Shield className="w-3 h-3" />
+                  <span>Admin</span>
+                </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    handleAction(() => {
+                      if (onNavigate) onNavigate('/admin/create');
+                      else window.location.assign('/admin/create');
+                    })
+                  }
+                  className="w-full flex items-center gap-3 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl hover:bg-blue-50/80 dark:hover:bg-slate-800/80 hover:text-[#2563eb] dark:hover:text-blue-400 transition cursor-pointer text-left group"
+                >
+                  <PlusCircle className="w-4 h-4 text-blue-500 group-hover:scale-105 transition-transform shrink-0" />
+                  <span>Create Problem</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    handleAction(() => {
+                      if (onNavigate) onNavigate('/admin/update');
+                      else window.location.assign('/admin/update');
+                    })
+                  }
+                  className="w-full flex items-center gap-3 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl hover:bg-blue-50/80 dark:hover:bg-slate-800/80 hover:text-[#2563eb] dark:hover:text-blue-400 transition cursor-pointer text-left group"
+                >
+                  <Sliders className="w-4 h-4 text-emerald-500 group-hover:scale-105 transition-transform shrink-0" />
+                  <span>Manage Problems</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 3. Footer Action */}

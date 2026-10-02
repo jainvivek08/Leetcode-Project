@@ -12,6 +12,7 @@ import {
   Clock,
   Cpu,
 } from 'lucide-react';
+import FailedTestCaseCard from './FailedTestCaseCard';
 
 const SubmissionHistory = ({ problemId }) => {
   const [submissions, setSubmissions] = useState([]);
@@ -212,10 +213,24 @@ const SubmissionHistory = ({ problemId }) => {
                         {sub.language || 'Code'}
                       </td>
                       <td className="py-3 px-3 font-mono text-zinc-300">
-                        {sub.runtime != null ? `${sub.runtime} ms` : '—'}
+                        <div className="flex flex-col gap-0.5">
+                          <span>{sub.runtime != null ? `${sub.runtime} ms` : '—'}</span>
+                          {sub.runtimePercentile != null && (
+                            <span className="text-[10px] text-emerald-400 font-sans font-semibold">
+                              Beats {sub.runtimePercentile}%
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-3 font-mono text-zinc-300">
-                        {formatMemory(sub.memory)}
+                        <div className="flex flex-col gap-0.5">
+                          <span>{formatMemory(sub.memory)}</span>
+                          {sub.memoryPercentile != null && (
+                            <span className="text-[10px] text-emerald-400 font-sans font-semibold">
+                              Beats {sub.memoryPercentile}%
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-3 font-mono text-zinc-300">
                         {sub.testCasesPassed != null && sub.testCasesTotal != null
@@ -268,16 +283,26 @@ const SubmissionHistory = ({ problemId }) => {
             {/* Modal Meta Strip */}
             <div className="px-5 py-3 bg-zinc-900/30 border-b border-zinc-800/80 flex flex-wrap items-center gap-3 text-xs">
               <div>{getStatusBadge(selectedSubmission.status)}</div>
-              {selectedSubmission.runtime && (
-                <div className="flex items-center gap-1 text-zinc-400 font-mono">
+              {selectedSubmission.runtime != null && (
+                <div className="flex items-center gap-1.5 text-zinc-400 font-mono">
                   <Clock className="w-3 h-3 text-zinc-500" />
                   <span>{selectedSubmission.runtime} ms</span>
+                  {selectedSubmission.runtimePercentile != null && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-sans">
+                      Beats {selectedSubmission.runtimePercentile}%
+                    </span>
+                  )}
                 </div>
               )}
-              {selectedSubmission.memory && (
-                <div className="flex items-center gap-1 text-zinc-400 font-mono">
+              {selectedSubmission.memory != null && (
+                <div className="flex items-center gap-1.5 text-zinc-400 font-mono">
                   <Cpu className="w-3 h-3 text-zinc-500" />
                   <span>{formatMemory(selectedSubmission.memory)}</span>
+                  {selectedSubmission.memoryPercentile != null && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-sans">
+                      Beats {selectedSubmission.memoryPercentile}%
+                    </span>
+                  )}
                 </div>
               )}
               {selectedSubmission.testCasesPassed != null && (
@@ -305,8 +330,15 @@ const SubmissionHistory = ({ problemId }) => {
               </button>
             </div>
 
-            {/* Error Message if any */}
-            {selectedSubmission.errorMessage && (
+            {/* Failed Test Case Detail if any */}
+            {selectedSubmission.failedTestCase && (
+              <div className="mx-5 mt-3">
+                <FailedTestCaseCard failedTestCase={selectedSubmission.failedTestCase} />
+              </div>
+            )}
+
+            {/* Error Message if any and no failedTestCase */}
+            {selectedSubmission.errorMessage && !selectedSubmission.failedTestCase && (
               <div className="mx-5 mt-3 p-3 bg-rose-950/20 border border-rose-800/40 rounded-xl text-xs text-rose-300 font-mono">
                 {selectedSubmission.errorMessage}
               </div>

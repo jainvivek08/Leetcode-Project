@@ -23,7 +23,7 @@ const submissionSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'wrong', 'tle', 'compile_error', 'runtime_error', 'error'],
+    enum: ['pending', 'accepted', 'wrong', 'tle', 'compile_error', 'runtime_error', 'error', 'judge_timeout', 'time_limit_exceeded'],
     default: 'pending'
   },
   runtime: {
@@ -45,13 +45,34 @@ const submissionSchema = new Schema({
   testCasesTotal: {  
     type: Number,
     default: 0
+  },
+  failedTestCase: {
+    type: new Schema({
+      index: { type: Number },
+      isHidden: { type: Boolean },
+      input: { type: String, default: null },
+      expectedOutput: { type: String, default: null },
+      actualOutput: { type: String, default: null },
+      status: { type: String },
+    }, { _id: false }),
+    default: undefined
+  },
+  runtimePercentile: {
+    type: Number,
+    default: null
+  },
+  memoryPercentile: {
+    type: Number,
+    default: null
   }
 }, { 
   timestamps: true
 });
 
 
-submissionSchema.index({userId:1 , problemId:1});
+submissionSchema.index({userId: 1, problemId: 1});
+submissionSchema.index({problemId: 1, status: 1, runtime: 1});
+submissionSchema.index({problemId: 1, status: 1, memory: 1});
 
 
 const Submission = mongoose.model('submission',submissionSchema);

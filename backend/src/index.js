@@ -1,5 +1,7 @@
+const path = require('path');
 const express = require('express')
 const app = express();
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 require('dotenv').config();
 
 // Fail-fast validation for mandatory environment variables
@@ -13,6 +15,7 @@ if (missingEnv.length > 0) {
 // Reverse proxy trust setting
 app.set('trust proxy', process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : false);
 
+const mongoose = require('mongoose');
 const main =  require('./config/db');
 const cookieParser =  require('cookie-parser');
 const authRouter = require("./routes/userAuth");
@@ -21,13 +24,15 @@ const problemRouter = require("./routes/problemCreator");
 const submitRouter = require("./routes/submit");
 const aiRouter = require("./routes/aiChatting");
 const videoRouter = require("./routes/videoCreator");
+const discussionRouter = require("./routes/discussionRoute");
 const cors = require('cors');
 const { generalLimiter } = require('./middleware/rateLimiters');
+const errorHandler = require('./middleware/errorHandler');
 const Submission = require('./models/submission');
 
-const clientOrigin = process.env.CLIENT_URL;
+const configuredCorsOrigin = process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:5173';
 const allowedOrigins = [
-    clientOrigin,
+    ...configuredCorsOrigin.split(',').map((o) => o.trim()),
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:5174',
@@ -57,11 +62,31 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
+// Health check endpoint (public, no auth)
+app.get('/health', (req, res) => {
+    const dbConnected = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    const redisConnected = redisClient && redisClient.isOpen ? 'connected' : 'disconnected/disabled';
+
+    return res.status(200).json({
+        status: "healthy",
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        services: {
+            database: dbConnected,
+            redis: redisConnected
+        }
+    });
+});
+
 app.use('/user',authRouter);
 app.use('/problem',problemRouter);
 app.use('/submission',submitRouter);
 app.use('/ai',aiRouter);
 app.use("/video",videoRouter);
+app.use("/discussion", discussionRouter);
+
+// Centralized error handling middleware (must be mounted after all routes)
+app.use(errorHandler);
 
 
 const InitalizeConnection = async ()=>{
@@ -93,6 +118,10 @@ const InitalizeConnection = async ()=>{
 }
 
 
-InitalizeConnection();
+if (require.main === module) {
+    InitalizeConnection();
+}
+
+module.exports = { app, InitalizeConnection };
 
 

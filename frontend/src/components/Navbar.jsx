@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { useSelector, useDispatch } from 'react-redux';
 import {
@@ -9,6 +9,10 @@ import {
   Layers,
   Compass,
   Terminal,
+  ShieldCheck,
+  PlusCircle,
+  Sliders,
+  ChevronDown,
 } from 'lucide-react';
 import { ProfileDropdown } from './profile/ProfileDropdown';
 import { logoutUser } from '../authSlice';
@@ -18,7 +22,7 @@ import axiosClient from '../utils/axiosClient';
  * Navbar Component
  * Standard LeetCode/CodeQuest layout:
  * - Brand: Orange gradient </> icon + CodeQuest title
- * - Nav links: Problems, Explore, Playground (No redundant My Profile / Settings)
+ * - Nav links: Problems, Explore, Playground, Admin (Admin-only)
  * - Right: Global Search, Daily Streak Flame, ProfileDropdown
  */
 function Navbar() {
@@ -28,8 +32,25 @@ function Navbar() {
   const { isAuthenticated, user } = useSelector((state) => state.auth || {});
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [streakCount, setStreakCount] = useState(0);
+  const adminDropdownRef = useRef(null);
+
+  // Click outside to close admin dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
+        setAdminDropdownOpen(false);
+      }
+    };
+    if (adminDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [adminDropdownOpen]);
 
   // Dynamically compute streak count based on user solved problems
   useEffect(() => {
@@ -97,7 +118,7 @@ function Navbar() {
             <Link
               to="/problems"
               className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
-                currentPath === '/problems' || currentPath.startsWith('/problem/')
+                currentPath === '/problems' || currentPath.startsWith('/problems/') || currentPath.startsWith('/problem/')
                   ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
               }`}
@@ -128,6 +149,74 @@ function Navbar() {
             >
               <span>Playground</span>
             </Link>
+
+            {/* 4. Admin Menu (Visible only to admin users) */}
+            {user?.role === 'admin' && (
+              <div className="relative" ref={adminDropdownRef}>
+                <button
+                  type="button"
+                  id="admin-nav-button"
+                  onClick={() => setAdminDropdownOpen((prev) => !prev)}
+                  aria-expanded={adminDropdownOpen}
+                  aria-haspopup="menu"
+                  className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
+                    currentPath.startsWith('/admin')
+                      ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <span>Admin</span>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    Pro
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
+                      adminDropdownOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {adminDropdownOpen && (
+                  <div
+                    role="menu"
+                    aria-orientation="vertical"
+                    aria-labelledby="admin-nav-button"
+                    className="absolute left-0 mt-1 w-52 bg-white/98 dark:bg-slate-900/98 backdrop-blur-md rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/60 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none"
+                  >
+                    <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Problem Controls
+                    </div>
+                    <Link
+                      to="/admin/create"
+                      role="menuitem"
+                      onClick={() => setAdminDropdownOpen(false)}
+                      className={`flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl transition ${
+                        currentPath === '/admin/create'
+                          ? 'bg-blue-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-bold'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400'
+                      }`}
+                    >
+                      <PlusCircle className="w-4 h-4 text-blue-500 shrink-0" />
+                      <span>Create Problem</span>
+                    </Link>
+                    <Link
+                      to="/admin/update"
+                      role="menuitem"
+                      onClick={() => setAdminDropdownOpen(false)}
+                      className={`flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl transition ${
+                        currentPath === '/admin/update' || currentPath.startsWith('/admin/update/')
+                          ? 'bg-blue-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-bold'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400'
+                      }`}
+                    >
+                      <Sliders className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>Manage Problems</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
         </div>
 
@@ -269,6 +358,40 @@ function Navbar() {
             <Terminal className="w-4 h-4" />
             <span>Playground</span>
           </Link>
+
+          {/* Admin Mobile Controls (Visible only to admin users) */}
+          {user?.role === 'admin' && (
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
+              <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin Controls</span>
+              </div>
+              <Link
+                to="/admin/create"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                  currentPath === '/admin/create'
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <PlusCircle className="w-4 h-4 text-blue-500" />
+                <span>Create Problem</span>
+              </Link>
+              <Link
+                to="/admin/update"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
+                  currentPath === '/admin/update' || currentPath.startsWith('/admin/update/')
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Sliders className="w-4 h-4 text-emerald-500" />
+                <span>Manage Problems</span>
+              </Link>
+            </div>
+          )}
 
           {!user && (
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">

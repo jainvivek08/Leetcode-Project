@@ -7,6 +7,7 @@ const AdminDelete = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchProblems();
@@ -16,7 +17,7 @@ const AdminDelete = () => {
     try {
       setLoading(true);
       const { data } = await axiosClient.get('/problem/getAllProblem');
-      setProblems(data);
+      setProblems(Array.isArray(data) ? data : (data?.problems || []));
     } catch (err) {
       setError(getApiErrorMessage(err) || 'Failed to fetch problems');
       console.error(err);
@@ -24,6 +25,14 @@ const AdminDelete = () => {
       setLoading(false);
     }
   };
+
+  const filteredProblems = problems.filter((p) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    const titleMatch = (p.title || '').toLowerCase().includes(q);
+    const numMatch = String(p.problemNumber || '').includes(q);
+    return titleMatch || numMatch;
+  });
 
   const handleDelete = async (id) => {
     const confirmationText = 'This will also delete all submissions, the solution video and solved-progress entries for this problem. This cannot be undone.';
@@ -55,8 +64,20 @@ const AdminDelete = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Delete Problems</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Delete Problems</h1>
+          <p className="text-sm text-base-content/70">
+            Permanently remove problems and associated submissions/videos.
+          </p>
+        </div>
+        <input
+          type="text"
+          placeholder="Search by title or #..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="input input-bordered w-full sm:w-72 text-sm"
+        />
       </div>
 
       {successMsg && (
@@ -90,10 +111,17 @@ const AdminDelete = () => {
             </tr>
           </thead>
           <tbody>
-            {problems.map((problem, index) => (
-              <tr key={problem._id}>
-                <th>{problem.problemNumber != null ? `#${problem.problemNumber}` : index + 1}</th>
-                <td>{problem.title}</td>
+            {filteredProblems.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="text-center py-6 text-base-content/60">
+                  {searchQuery ? 'No problems matching your search.' : 'No problems found.'}
+                </td>
+              </tr>
+            ) : (
+              filteredProblems.map((problem, index) => (
+                <tr key={problem._id}>
+                  <th>{problem.problemNumber != null ? `#${problem.problemNumber}` : index + 1}</th>
+                  <td>{problem.title}</td>
                 <td>
                   <span className={`badge ${
                     problem.difficulty?.toLowerCase() === 'easy' 
@@ -125,7 +153,7 @@ const AdminDelete = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

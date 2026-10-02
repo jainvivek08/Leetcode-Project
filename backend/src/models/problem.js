@@ -52,38 +52,21 @@ const problemSchema = new Schema({
     trim: true,
   },
   constraints: {
-    type: [String],
-    default: [],
-    validate: [
-      {
-        validator: function (val) {
-          return !val || (Array.isArray(val) && val.length <= 20);
-        },
-        message: 'Constraints list cannot exceed 20 items.',
-      },
-      {
-        validator: function (val) {
-          return (
-            !val ||
-            (Array.isArray(val) &&
-              val.every((c) => typeof c === 'string' && c.length <= 300))
-          );
-        },
-        message: 'Each constraint cannot exceed 300 characters.',
-      },
-    ],
+    type: String,
+    default: '',
+    trim: true,
   },
   timeLimit: {
     type: Number,
-    default: 2,
-    min: [1, 'Time limit must be at least 1 second.'],
-    max: [10, 'Time limit cannot exceed 10 seconds.'],
+    default: 2000,
+    min: [100, 'Time limit must be at least 100 ms.'],
+    max: [10000, 'Time limit cannot exceed 10000 ms.'],
   },
   memoryLimit: {
     type: Number,
-    default: 256,
-    min: [64, 'Memory limit must be at least 64 MB.'],
-    max: [512, 'Memory limit cannot exceed 512 MB.'],
+    default: 256000,
+    min: [64, 'Memory limit must be at least 64.'],
+    max: [512000, 'Memory limit cannot exceed 512000 KB.'],
   },
   visibleTestCases: [
     {
@@ -149,6 +132,8 @@ problemSchema.index({ tags: 1 });
 problemSchema.index({ title: 1 });
 problemSchema.index({ problemNumber: 1 }, { unique: true, sparse: true });
 problemSchema.index({ slug: 1 }, { unique: true, sparse: true });
+problemSchema.index({ difficulty: 1, tags: 1, problemNumber: 1 });
+problemSchema.index({ title: 'text', slug: 'text' });
 
 const Problem = mongoose.model('problem', problemSchema);
 

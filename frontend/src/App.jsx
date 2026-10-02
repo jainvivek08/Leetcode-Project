@@ -11,17 +11,20 @@ import { useDispatch, useSelector } from 'react-redux';
 import { checkAuth, logoutUser } from "./authSlice";
 import { useEffect } from "react";
 import AdminPanel from "./components/AdminPanel";
+import ProblemForm from "./components/ProblemForm";
 import SolveProblemPage from "./pages/SolveProblemPage";
 import ProblemPage from "./pages/ProblemPage";
 import Admin from "./pages/Admin";
-import AdminVideo from "./components/AdminVideo"
-import AdminDelete from "./components/AdminDelete"
-import AdminUpload from "./components/AdminUpload"
+import AdminVideo from "./components/AdminVideo";
+import AdminDelete from "./components/AdminDelete";
+import AdminUpload from "./components/AdminUpload";
+import AdminUpdate from "./components/AdminUpdate";
+import AdminRoute from "./components/AdminRoute";
 
 function App(){
   const location = useLocation();
   const dispatch = useDispatch();
-  const {isAuthenticated,user,loading} = useSelector((state)=>state.auth);
+  const { isAuthenticated, loading } = useSelector((state) => state.auth);
 
   // check initial authentication
   useEffect(() => {
@@ -64,14 +67,18 @@ function App(){
       <Route path="/profile" element={<DeveloperProfile />} />
       <Route path="/settings" element={<SettingsPage />} />
 
-      {/* 5. Admin Routes */}
-      <Route path="/admin" element={isAuthenticated && user?.role === 'admin' ? <Admin /> : <Navigate to="/problems" />} />
-      <Route path="/admin/create" element={isAuthenticated && user?.role === 'admin' ? <AdminPanel /> : <Navigate to="/problems" />} />
-      <Route path="/admin/delete" element={isAuthenticated && user?.role === 'admin' ? <AdminDelete /> : <Navigate to="/problems" />} />
-      <Route path="/admin/video" element={isAuthenticated && user?.role === 'admin' ? <AdminVideo /> : <Navigate to="/problems" />} />
-      <Route path="/admin/upload/:problemId" element={isAuthenticated && user?.role === 'admin' ? <AdminUpload /> : <Navigate to="/problems" />} />
+      {/* 5. Admin Routes (Strictly Protected) */}
+      <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+      <Route path="/admin/create" element={<AdminRoute><ProblemForm mode="create" /></AdminRoute>} />
+      <Route path="/admin/update" element={<AdminRoute><AdminUpdate /></AdminRoute>} />
+      <Route path="/admin/update/:id" element={<AdminRoute><ProblemForm mode="edit" /></AdminRoute>} />
+      <Route path="/admin/delete" element={<AdminRoute><AdminDelete /></AdminRoute>} />
+      <Route path="/admin/video" element={<AdminRoute><AdminVideo /></AdminRoute>} />
+      <Route path="/admin/upload/:problemId" element={<AdminRoute><AdminUpload /></AdminRoute>} />
 
-      {/* 6. Problem Solve Arena */}
+      {/* 6. Problem Solve Arena (Supports both canonical /problems/:slug and backward-compatible /problem/:id) */}
+      <Route path="/problems/:slug" element={<SolveProblemPage />} />
+      <Route path="/problem/:id" element={<SolveProblemPage />} />
       <Route path="/problem/:problemId" element={<SolveProblemPage />} />
       <Route path="/solve/:problemId" element={<SolveProblemPage />} />
 

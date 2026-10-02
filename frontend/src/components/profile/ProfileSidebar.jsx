@@ -86,7 +86,7 @@ function ProfileSidebar({ profile, onEditClick, onPhotoClick, onToast }) {
                   : 'bg-blue-50 border-blue-200/80 text-blue-700'
               }`}
             >
-              {rank === 'Unranked' ? 'Unranked' : rank.startsWith('#') ? `Rank ${rank}` : `Rank #${rank}`}
+              {rank === 'Unranked' ? 'Unranked' : String(rank).startsWith('#') ? `Rank ${rank}` : `Rank #${rank}`}
             </span>
             <span className="block text-[10px] text-slate-400 font-mono mt-1 font-semibold">
               {rankPercentile}
