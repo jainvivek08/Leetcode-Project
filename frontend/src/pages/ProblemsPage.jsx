@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   PlusCircle,
   Sliders,
+  Star,
 } from 'lucide-react';
 import axiosClient from '../utils/axiosClient';
 import ProfileDropdown from '../components/profile/ProfileDropdown';
@@ -325,6 +326,8 @@ function ProblemsPage() {
   const [liveProblems, setLiveProblems] = useState(BASE_PROBLEMS_DATA);
   const [availableTags, setAvailableTags] = useState([]);
   const [solvedIds, setSolvedIds] = useState([]);
+  const [bookmarkedIds, setBookmarkedIds] = useState(new Set());
+  const [onlyBookmarked, setOnlyBookmarked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -361,6 +364,7 @@ function ProblemsPage() {
 
     fetchTags();
     fetchDailyChallenge();
+    document.title = 'Problems | CodeQuest';
   }, []);
 
   // Accordion state:
@@ -521,6 +525,80 @@ function ProblemsPage() {
     }
   }, [user]);
 
+  // Fetch bookmarked problems for authenticated user
+  useEffect(() => {
+    const fetchBookmarks = async () => {
+      try {
+        const { data } = await axiosClient.get('/user/bookmarks');
+        if (data?.success && Array.isArray(data.bookmarks)) {
+          const ids = data.bookmarks.map((b) =>
+            typeof b === 'object' && b?._id ? String(b._id) : String(b)
+          );
+          setBookmarkedIds(new Set(ids));
+        }
+      } catch {
+        // Guest user or network error
+      }
+    };
+
+    if (user) {
+      fetchBookmarks();
+    } else {
+      setBookmarkedIds(new Set());
+      setOnlyBookmarked(false);
+    }
+  }, [user]);
+
+  // Optimistic toggle bookmark with rollback on error
+  const handleToggleBookmark = async (e, problemId) => {
+    e.stopPropagation();
+    if (!user) {
+      triggerToast('Please sign in to bookmark problems', '⚠️');
+      return;
+    }
+
+    const idStr = String(problemId);
+    const wasBookmarked = bookmarkedIds.has(idStr);
+
+    // Optimistic UI update
+    setBookmarkedIds((prev) => {
+      const next = new Set(prev);
+      if (wasBookmarked) {
+        next.delete(idStr);
+      } else {
+        next.add(idStr);
+      }
+      return next;
+    });
+
+    try {
+      const { data } = await axiosClient.post(`/problem/${problemId}/bookmark`);
+      if (data?.success) {
+        triggerToast(
+          data.bookmarked ? 'Problem bookmarked' : 'Bookmark removed',
+          data.bookmarked ? '⭐' : '🗑️'
+        );
+      } else {
+        // Rollback
+        setBookmarkedIds((prev) => {
+          const next = new Set(prev);
+          if (wasBookmarked) next.add(idStr);
+          else next.delete(idStr);
+          return next;
+        });
+      }
+    } catch (err) {
+      // Rollback on network failure
+      setBookmarkedIds((prev) => {
+        const next = new Set(prev);
+        if (wasBookmarked) next.add(idStr);
+        else next.delete(idStr);
+        return next;
+      });
+      triggerToast(err.response?.data?.message || 'Failed to update bookmark', '❌');
+    }
+  };
+
   // Close dropdown on outside click
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -587,6 +665,10 @@ function ProblemsPage() {
 
     // 1. Filter problems
     const filteredProblems = liveProblems.filter((p) => {
+      // Bookmarked filter
+      if (onlyBookmarked && !bookmarkedIds.has(String(p._id))) {
+        return false;
+      }
       // Topic/Tag filter
       if (selectedTopic !== 'All') {
         const selNorm = selectedTopic.toLowerCase();
@@ -722,6 +804,8 @@ function ProblemsPage() {
     selectedDifficulty,
     selectedCompany,
     selectedSort,
+    onlyBookmarked,
+    bookmarkedIds,
   ]);
 
   // Extract unique companies from real questions
@@ -1213,10 +1297,33 @@ function ProblemsPage() {
                 )}
               </div>
 
+              {/* 6. Bookmarked Filter Chip */}
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOnlyBookmarked((prev) => {
+                      const next = !prev;
+                      triggerToast(next ? 'Showing bookmarked problems' : 'Showing all problems', '⭐');
+                      return next;
+                    });
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+                    onlyBookmarked
+                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 text-amber-600 dark:text-amber-400'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                  }`}
+                >
+                  <Star className={`w-3.5 h-3.5 ${onlyBookmarked ? 'fill-amber-400 text-amber-500' : 'text-slate-400'}`} />
+                  <span>Bookmarked{bookmarkedIds.size > 0 ? ` (${bookmarkedIds.size})` : ''}</span>
+                </button>
+              )}
+
               {/* Reset Filters */}
               {(selectedTopic !== 'All' ||
                 selectedDifficulty !== 'All' ||
                 selectedCompany !== 'All' ||
+                onlyBookmarked ||
                 searchQuery ||
                 selectedSort !== 'default') && (
                 <button
@@ -1226,6 +1333,7 @@ function ProblemsPage() {
                     setSelectedDifficulty('All');
                     setSelectedCompany('All');
                     setSelectedSort('default');
+                    setOnlyBookmarked(false);
                     setSearchQuery('');
                     triggerToast('All filters reset', '🔄');
                   }}
@@ -1251,35 +1359,58 @@ function ProblemsPage() {
           )}
 
           {/* ============================================================ */}
-          {/* 3-LEVEL HIERARCHICAL ACCORDION LIST                          */}
+          {/* 3-LEVEL HIERARCHICAL ACCORDION LIST OR GRID                  */}
           {/* ============================================================ */}
           {loading ? (
-            <div className="p-16 flex flex-col items-center justify-center space-y-3">
-              <span className="loading loading-spinner loading-lg text-blue-600"></span>
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Loading problems...</p>
+            <div className="p-6 space-y-3.5 animate-pulse select-none">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800/80"
+                >
+                  <div className="flex items-center gap-3 w-1/2">
+                    <div className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-750 shrink-0" />
+                    <div className="space-y-1.5 w-full">
+                      <div className="h-4 bg-slate-200 dark:bg-slate-750 rounded w-3/4" />
+                      <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-1/3" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="h-6 w-16 bg-slate-200 dark:bg-slate-750 rounded-full" />
+                    <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded hidden sm:block" />
+                    <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded hidden sm:block" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : hierarchicalTopics.length === 0 ? (
+            <div className="p-16 text-center space-y-3 select-none">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                <Search className="w-6 h-6" />
+              </div>
+              <p className="text-slate-800 dark:text-slate-200 text-sm font-bold">
+                No problems found matching your filters.
+              </p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Try searching with different keywords, removing tag constraints, or clearing filters.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedTopic('All');
+                  setSelectedDifficulty('All');
+                  setSelectedCompany('All');
+                  setOnlyBookmarked(false);
+                }}
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                Clear Filters
+              </button>
             </div>
           ) : viewMode === 'list' ? (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {hierarchicalTopics.length === 0 ? (
-                <div className="p-12 text-center">
-                  <p className="text-slate-400 text-sm font-semibold">
-                    No problems match your filters.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSelectedTopic('All');
-                      setSelectedDifficulty('All');
-                      setSelectedCompany('All');
-                    }}
-                    className="mt-3 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                  >
-                    Clear filters
-                  </button>
-                </div>
-              ) : (
-                hierarchicalTopics.map((topic) => {
+              {hierarchicalTopics.map((topic) => {
                   const isTopicOpen = !!expandedTopics[topic.name];
 
                   return (
@@ -1349,7 +1480,7 @@ function ProblemsPage() {
                                         {diff.name}
                                       </span>
                                     </div>
-                                    <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                                       {diff.count} {diff.count === 1 ? 'Problem' : 'Problems'}
                                     </span>
                                   </button>
@@ -1387,9 +1518,25 @@ function ProblemsPage() {
                                               )}
                                             </div>
 
-                                            {/* Problem Title */}
-                                            <div className="col-span-5 font-semibold text-xs sm:text-sm text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition pr-2 truncate">
-                                              {problem.problemNumber != null ? `#${problem.problemNumber}. ` : ''}{problem.title}
+                                            {/* Problem Title + Bookmark */}
+                                            <div className="col-span-5 flex items-center gap-2 pr-2 overflow-hidden">
+                                              <button
+                                                type="button"
+                                                onClick={(e) => handleToggleBookmark(e, problem._id)}
+                                                title={bookmarkedIds.has(String(problem._id)) ? 'Remove Bookmark' : 'Bookmark Problem'}
+                                                className="p-1 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/30 transition shrink-0 cursor-pointer"
+                                              >
+                                                <Star
+                                                  className={`w-3.5 h-3.5 transition ${
+                                                    bookmarkedIds.has(String(problem._id))
+                                                      ? 'fill-amber-400 text-amber-500'
+                                                      : 'text-slate-300 dark:text-slate-600 hover:text-amber-400'
+                                                  }`}
+                                                />
+                                              </button>
+                                              <span className="font-semibold text-xs sm:text-sm text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate">
+                                                {problem.problemNumber != null ? `#${problem.problemNumber}. ` : ''}{problem.title}
+                                              </span>
                                             </div>
 
                                             {/* Companies */}
@@ -1449,8 +1596,7 @@ function ProblemsPage() {
                       )}
                     </div>
                   );
-                })
-              )}
+                })}
             </div>
           ) : (
             /* ============================================================ */

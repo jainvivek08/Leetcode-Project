@@ -1,7 +1,8 @@
 const express = require('express');
 
 const authRouter =  express.Router();
-const {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank, getActivityHeatmap} = require('../controllers/userAuthent')
+const {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank, getActivityHeatmap, getLeaderboard} = require('../controllers/userAuthent');
+const { getUserBookmarks } = require('../controllers/userProblem');
 const userMiddleware = require("../middleware/userMiddleware");
 const adminMiddleware = require('../middleware/adminMiddleware');
 const { authLimiter } = require('../middleware/rateLimiters');
@@ -19,6 +20,8 @@ authRouter.put('/updateProfile', userMiddleware, express.json({ limit: '10mb' })
 authRouter.get('/getRank', userMiddleware, getUserRank);
 authRouter.get('/getUserRank', userMiddleware, getUserRank);
 authRouter.get('/activity-heatmap', userMiddleware, getActivityHeatmap);
+authRouter.get('/leaderboard', getLeaderboard);
+authRouter.get('/bookmarks', userMiddleware, getUserBookmarks);
 
 authRouter.get('/check', userMiddleware, (req, res) => {
     const reply = {

@@ -27,7 +27,7 @@ graph TB
 
     subgraph Storage ["Databases & Cache"]
         Mongo[("MongoDB Atlas / Replica Set\nUsers, Problems, Submissions, Discussions")]
-        Redis[("Redis 7 Cache\nSession State, Fast Reads, Token Blacklists")]
+        Redis[("Redis 7 / Memory Fallback\nToken Blocklist & 60s Leaderboard Cache")]
     end
 
     subgraph External ["External Services"]
@@ -80,7 +80,8 @@ graph TB
 - **Production Cookie Security**: Dynamic `SameSite` and `Secure` cookie headers tailored to cross-origin development and production environments.
 - **Tiered Rate Limiting**: Dedicated protection for authentication endpoints (10 req / 15 min), Gemini AI chat (15 req / min), and general reads.
 - **Centralized Error Handling**: Uniform JSON error responses for Mongoose `CastError`, `ValidationError`, duplicate key `E11000`, and JSON syntax errors with stack trace stripping in production.
-- **Health Check Endpoint**: Public `GET /health` monitoring real-time MongoDB and Redis connectivity.
+- **Health Check Endpoint**: Public `GET /api/health` and `GET /health` monitoring real-time MongoDB and Redis connectivity.
+- **JWT Token Blocklist**: Redis-backed blocklist on logout with in-memory fallback for free-tier demo deployments.
 
 ---
 
@@ -109,21 +110,32 @@ cp backend/.env.example backend/.env
 | :--- | :--- | :--- |
 | `PORT` | Backend server port | `3000` |
 | `NODE_ENV` | Application environment (`development` / `production`) | `development` |
-| `DB_CONNECT_STRING` | MongoDB connection URI | `mongodb://localhost:27017/Leetcode` |
+| `DB_CONNECT_STRING` | MongoDB Atlas / replica connection URI | `mongodb://localhost:27017/Leetcode` |
+| `MONGO_TEST_URI` | Isolated MongoDB URI for automated test suites | `mongodb://localhost:27017/Leetcode_test` |
 | `REDIS_HOST` | Redis hostname | `127.0.0.1` |
 | `REDIS_PORT` | Redis port | `6379` |
 | `REDIS_PASSWORD` | Redis password (optional) | `""` |
+| `ALLOW_MEMORY_BLOCKLIST` | Use in-memory token blocklist when Redis is omitted | `false` |
 | `JWT_KEY` | Secret key for signing JWT tokens | *Your strong random secret* |
 | `JWT_EXPIRES_IN_SECONDS` | JWT cookie lifetime in seconds | `604800` (7 days) |
 | `CORS_ORIGIN` | Allowed CORS origins (comma-separated) | `http://localhost:5173` |
 | `CLIENT_URL` | Primary frontend URL | `http://localhost:5173` |
-| `TRUST_PROXY` | Reverse proxy hop count | `1` |
+| `TRUST_PROXY` | Reverse proxy hop count (enable behind Render/Nginx) | `1` |
 | `COOKIE_SAMESITE` | Cookie SameSite mode (`lax` / `none` / `strict`) | `lax` |
+| `GENERAL_RATE_LIMIT_MAX` | Global rate limit request quota per window | `300` (prod) / `3000` (dev) |
+| `GENERAL_RATE_LIMIT_WINDOW_MINUTES` | Global rate limit window size in minutes | `15` |
+| `JUDGE0_BASE_URL` | Judge0 compiler endpoint (`RapidAPI` or self-hosted) | `https://judge0-ce.p.rapidapi.com` |
 | `JUDGE0_KEY` | RapidAPI / Judge0 authentication key | *Your Judge0 API key* |
+| `JUDGE0_POLL_MAX_ATTEMPTS` | Maximum polling attempts for batch submissions | `30` |
+| `JUDGE0_POLL_INTERVAL_MS` | Delay between Judge0 polling attempts in ms | `1000` |
 | `GEMINI_KEY` | Google Gemini API key for AI assistant | *Your Gemini API key* |
+| `GEMINI_MODEL` | Primary Gemini model for algorithmic queries | `gemini-1.5-flash` |
+| `GEMINI_FALLBACK_MODEL` | Fallback model if primary model experiences 429/404 | `gemini-1.5-pro` |
 | `CLOUDINARY_CLOUD_NAME`| Cloudinary Cloud Name for video uploads | *Your Cloudinary cloud name* |
 | `CLOUDINARY_API_KEY` | Cloudinary API Key | *Your Cloudinary API key* |
 | `CLOUDINARY_API_SECRET` | Cloudinary API Secret | *Your Cloudinary API secret* |
+| `SHOW_FAILED_HIDDEN_TEST_DETAILS` | Expose test details on failed hidden tests | `true` |
+| `DEMO_PASSWORD` | Default password for idempotent demo seeder | `DemoPass@123` |
 
 ### Frontend Configuration (`frontend/.env`)
 
@@ -236,20 +248,100 @@ docker compose down -v
 
 | Method | Endpoint | Access | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | Public | System status, uptime, and database/redis connectivity |
-| `POST` | `/user/register` | Public (Rate-limited) | Account registration with mass-assignment protection |
-| `POST` | `/user/login` | Public (Rate-limited) | User authentication with secure HttpOnly cookie issuance |
-| `GET` | `/user/check` | Authenticated | Session validation & current user context |
-| `GET` | `/user/getRank` | Authenticated | $O(1)$ live rank and percentile calculation |
-| `GET` | `/user/activity-heatmap` | Authenticated | 365-day submission frequency & active streak metrics |
-| `GET` | `/problem/list` | Public | Paginated problem list with tags and difficulty filtering |
-| `GET` | `/problem/problemById/:id` | Public | Public problem specifications (sanitized) |
-| `POST` | `/submission/run` | Authenticated | Execute code with custom stdin on Judge0 |
-| `POST` | `/submission/submit` | Authenticated | Evaluate code across all testcases and compute percentiles |
-| `GET` | `/discussion/problem/:problemId` | Public | Community discussion threads for a specific problem |
-| `POST` | `/discussion/problem/:problemId` | Authenticated | Create a new discussion post |
-| `POST` | `/discussion/:id/upvote` | Authenticated | Toggle upvote for a discussion post |
-| `POST` | `/ai/chat` | Authenticated (Rate-limited) | Algorithmic code explanation & hints via Gemini AI |
+| `GET` | `/api/health` | Public | System status, uptime, and database/redis connectivity |
+| `POST` | `/api/user/register` | Public (Rate-limited) | Account registration with mass-assignment protection |
+| `POST` | `/api/user/login` | Public (Rate-limited) | User authentication with secure HttpOnly cookie issuance |
+| `POST` | `/api/user/logout` | Authenticated | User logout with Redis token blocklist invalidation |
+| `GET` | `/api/user/check` | Authenticated | Session validation & current user context |
+| `GET` | `/api/user/getRank` | Authenticated | $O(1)$ live rank and percentile calculation |
+| `GET` | `/api/user/activity-heatmap` | Authenticated | 365-day submission frequency & active streak metrics |
+| `GET` | `/api/user/bookmarks` | Authenticated | Retrieve user bookmarked problem collection |
+| `GET` | `/api/problem/all-lite` | Public | Lightweight problem array for fast client-side searching |
+| `GET` | `/api/problem/list` | Public | Paginated problem list with tags and difficulty filtering |
+| `GET` | `/api/problem/bySlug/:slug` | Public | Public problem specifications retrieved by slug |
+| `GET` | `/api/problem/problemById/:id` | Public | Public problem specifications (sanitized without solutions) |
+| `POST` | `/api/problem/:id/bookmark` | Authenticated | Toggle bookmark status for a problem |
+| `GET` | `/api/problem/adminList` | Admin | Administrative problem list including hidden test cases |
+| `POST` | `/api/submission/run/:id` | Authenticated | Execute code with custom stdin on Judge0 |
+| `POST` | `/api/submission/submit/:id` | Authenticated | Evaluate code across all testcases and compute percentiles |
+| `GET` | `/api/discussion/problem/:problemId` | Public | Community discussion threads for a specific problem |
+| `POST` | `/api/discussion/problem/:problemId` | Authenticated | Create a new discussion post |
+| `POST` | `/api/discussion/:id/upvote` | Authenticated | Toggle upvote for a discussion post |
+| `POST` | `/api/ai/chat` | Authenticated (Rate-limited) | Algorithmic code explanation & hints via Gemini AI |
+| `GET` | `/api/leaderboard` | Public | Real-time top 50 leaderboard with 60s cache and difficulty breakdown |
+
+---
+
+## 🎯 Demo Guide & 5-Minute Walkthrough
+
+### 1. Seed Demo Data (Idempotent)
+To populate the database with realistic developer accounts, 30-day submission heatmaps, bookmarks, and threaded discussions:
+
+```bash
+# Optional: customize demo password via DEMO_PASSWORD env variable
+export DEMO_PASSWORD="DemoPass@123"
+
+# Run idempotent seeder
+node backend/scripts/seed_demo.js
+```
+
+### 2. Demo User Credentials
+> **Default Password**: `DemoPass@123` (or the value set in `DEMO_PASSWORD`)
+
+| Account Type | Email | Role | Seeded Stats |
+| :--- | :--- | :--- | :--- |
+| **Admin** | `admin@codequest.dev` | `admin` | Full problem authoring & management access |
+| **Coder #1** | `alex.chen@demo.com` | `user` | Rank #1, 14 Solved, 7-Day Active Streak |
+| **Coder #2** | `priya.sharma@demo.com` | `user` | Rank #2, 10 Solved, 5-Day Active Streak |
+| **Coder #3** | `marcus.vance@demo.com` | `user` | Rank #3, 7 Solved, 3-Day Active Streak |
+| **Coder #4** | `elena.rostova@demo.com` | `user` | Rank #4, 4 Solved, 2-Day Active Streak |
+| **Coder #5** | `david.kim@demo.com` | `user` | Rank #5, 2 Solved, 1-Day Active Streak |
+
+---
+
+### 3. Step-by-Step 5-Minute Evaluation Script
+
+1. **Sign In**:
+   - Navigate to `/login` and sign in as `alex.chen@demo.com` (password: `DemoPass@123`).
+   - Notice instant redirection to the coding arena with your profile avatar and streak flame indicator.
+
+2. **Problem Directory & Tag Filtering**:
+   - Browse `/problems`.
+   - Filter problems by topic pills (e.g. `Arrays`, `Strings`, `Mathematics`, `Dynamic Programming`).
+   - Click the **Bookmarked** filter chip to view problems saved to your personal library.
+   - Click the **Star** icon next to any problem title to toggle bookmarks on/off with instant optimistic UI feedback.
+
+3. **Compiler Arena & Custom Input**:
+   - Open any challenge (e.g. `/problems/two-sum` or `/problems/addition-of-two-numbers`).
+   - Choose your preferred language (C++, Java, Python3, JavaScript).
+   - In the bottom drawer, test **Custom Input** and click **Run Code** to inspect standard output.
+   - Click **Submit** to run your solution against hidden test cases. View real-time runtime and memory percentiles ("Beats X% of users").
+
+4. **AI Algorithmic Assistant (Gemini)**:
+   - In the problem left pane, click the **ChatAI** tab.
+   - Ask for a complexity analysis or edge case hint (e.g., *"What is the time complexity of this solution?"*).
+   - Notice rate-limited, formatted responses designed to guide without spoiling answers.
+
+5. **Community Discussions & Solutions**:
+   - Switch to the **Discussions** tab.
+   - Inspect formatted community solutions containing clean syntax highlighting.
+   - Click the upvote button to endorse helpful solutions and observe instant count increments.
+   - Read peer comments explaining space/time trade-offs.
+
+6. **Live Leaderboard**:
+   - Click **Leaderboard** in the top navigation bar (`/leaderboard`).
+   - Review the top 50 participants with **#1 Gold**, **#2 Silver**, and **#3 Bronze** ranking badges.
+   - Notice the Easy/Medium/Hard difficulty breakdown badges per developer.
+   - When viewing as a participant outside the top 50, observe the sticky bottom rank banner: `Your Rank: #X | Solved: Y`.
+
+7. **Developer Profile & Activity Heatmap**:
+   - Click your avatar in the top right and select **My Profile** (`/profile`).
+   - View your 365-day submission activity heatmap, persistent streak calculation, and solve breakdown.
+
+8. **Admin Management Panel**:
+   - Sign out and log in as `admin@codequest.dev`.
+   - Click **Admin** in the navigation bar.
+   - Navigate to `/admin/create` to publish a new challenge with hidden test cases and starter templates, or `/admin/update` to edit existing problems.
 
 ---
 

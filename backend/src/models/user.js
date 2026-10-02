@@ -35,6 +35,10 @@ const userSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'problem'
     }],
+    bookmarks: [{
+        type: Schema.Types.ObjectId,
+        ref: 'problem'
+    }],
     password:{
         type:String,
         required: true

@@ -59,24 +59,43 @@ const chunkArray = (arr, size = 20) => {
   return chunks;
 };
 
+const getJudge0Config = () => {
+  const rawBaseUrl = process.env.JUDGE0_BASE_URL || 'https://judge0-ce.p.rapidapi.com';
+  const baseUrl = rawBaseUrl.replace(/\/+$/, '');
+  const apiKey = (process.env.JUDGE0_KEY || process.env.RAPIDAPI_KEY || '').trim();
+
+  const headers = {};
+  if (apiKey) {
+    headers['x-rapidapi-key'] = apiKey;
+    try {
+      const urlObj = new URL(baseUrl);
+      headers['x-rapidapi-host'] = urlObj.host;
+    } catch {
+      headers['x-rapidapi-host'] = 'judge0-ce.p.rapidapi.com';
+    }
+  }
+
+  return { baseUrl, headers };
+};
+
 const submitBatch = async (submissions) => {
   if (!Array.isArray(submissions) || submissions.length === 0) {
     return [];
   }
 
+  const { baseUrl, headers } = getJudge0Config();
   const chunks = chunkArray(submissions, 20);
   const allResults = [];
 
   for (const chunk of chunks) {
     const options = {
       method: 'POST',
-      url: 'https://judge0-ce.p.rapidapi.com/submissions/batch',
+      url: `${baseUrl}/submissions/batch`,
       params: {
         base64_encoded: 'false'
       },
       headers: {
-        'x-rapidapi-key': process.env.JUDGE0_KEY,
-        'x-rapidapi-host': 'judge0-ce.p.rapidapi.com',
+        ...headers,
         'Content-Type': 'application/json'
       },
       data: {
@@ -115,6 +134,7 @@ const submitToken = async (resultToken) => {
     return [];
   }
 
+  const { baseUrl, headers } = getJudge0Config();
   const tokenChunks = chunkArray(resultToken, 20);
   let attempts = 0;
   const configuredMaxAttempts = parseInt(process.env.JUDGE0_POLL_MAX_ATTEMPTS, 10);
@@ -133,15 +153,14 @@ const submitToken = async (resultToken) => {
         tokenChunks.map(async (chunk) => {
           const options = {
             method: 'GET',
-            url: 'https://judge0-ce.p.rapidapi.com/submissions/batch',
+            url: `${baseUrl}/submissions/batch`,
             params: {
               tokens: chunk.join(','),
               base64_encoded: 'true',
               fields: '*'
             },
             headers: {
-              'x-rapidapi-key': process.env.JUDGE0_KEY,
-              'x-rapidapi-host': 'judge0-ce.p.rapidapi.com'
+              ...headers
             }
           };
           const response = await axios.request(options);
@@ -200,7 +219,8 @@ module.exports = {
   mapJudge0Status,
   getErrorMessage,
   submitBatch,
-  submitToken
+  submitToken,
+  getJudge0Config
 };
 
 

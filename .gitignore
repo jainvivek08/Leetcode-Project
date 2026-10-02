@@ -14,6 +14,9 @@ node_modules/
 DataPart/
 datapart/
 backend/scripts/backups/
+backend/backups/
+backups/
+*/backups/
 
 # Build outputs
 dist/

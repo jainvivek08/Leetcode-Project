@@ -11,11 +11,13 @@ const {
   getAdminProblemById,
   getAdminProblemList,
   getAllProblem,
+  getAllProblemLite,
   getProblemTags,
   getProblemList,
   getDailyChallenge,
   solvedAllProblembyUser,
   submittedProblem,
+  toggleBookmark,
 } = require("../controllers/userProblem");
 const userMiddleware = require("../middleware/userMiddleware");
 
@@ -34,11 +36,13 @@ problemRouter.get("/bySlug/:slug", getProblemBySlug);
 problemRouter.get("/list", getAllProblem);
 problemRouter.get("/allProblem", getAllProblem);
 problemRouter.get("/getAllProblem", getAllProblem);
+problemRouter.get("/all-lite", getAllProblemLite);
 problemRouter.get("/problemById/:id", getProblemById);
 
 // User authenticated routes
 problemRouter.get("/problemSolvedByUser", userMiddleware, solvedAllProblembyUser);
 problemRouter.get("/submittedProblem/:pid", userMiddleware, submittedProblem);
+problemRouter.post("/:id/bookmark", userMiddleware, toggleBookmark);
 
 // Discussion routes under /problem
 const { getProblemDiscussions, createDiscussion } = require("../controllers/discussionController");

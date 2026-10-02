@@ -179,17 +179,32 @@ const adminRegister = async(req,res)=>{
     }
 }
 
-const deleteProfile = async(req,res)=>{
-    try{
+const deleteProfile = async (req, res, next) => {
+    try {
         const userId = req.result._id;
+        const { currentPassword } = req.body || {};
+
+        if (!currentPassword || typeof currentPassword !== 'string' || !currentPassword.trim()) {
+            return res.status(401).json({ message: "Invalid current password" });
+        }
+
+        const user = req.result?.password ? req.result : await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid current password" });
+        }
+
         await User.findByIdAndDelete(userId);
         await blockTokenAndClearCookie(req, res);
-        res.status(200).send("Deleted Successfully");
+        return res.status(200).json({ message: "Account deleted successfully" });
+    } catch (err) {
+        next(err);
     }
-    catch(err){
-        res.status(500).send("Internal Server Error");
-    }
-}
+};
 
 const getProfile = async (req, res) => {
     try {
@@ -398,4 +413,127 @@ const getActivityHeatmap = async (req, res) => {
     }
 };
 
-module.exports = {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank, getActivityHeatmap};
+let leaderboardCache = null;
+let leaderboardCacheTime = 0;
+const LEADERBOARD_CACHE_TTL_MS = 60 * 1000;
+
+const getLeaderboard = async (req, res) => {
+    try {
+        const limitParam = parseInt(req.query.limit, 10);
+        const limit = (!isNaN(limitParam) && limitParam > 0 && limitParam <= 100) ? limitParam : 50;
+
+        const now = Date.now();
+        if (leaderboardCache && (now - leaderboardCacheTime < LEADERBOARD_CACHE_TTL_MS) && limit === 50) {
+            return res.status(200).json({
+                success: true,
+                leaderboard: leaderboardCache,
+                cachedAt: new Date(leaderboardCacheTime).toISOString(),
+                fromCache: true
+            });
+        }
+
+        const pipeline = [
+            {
+                $match: {
+                    role: { $ne: 'admin' }
+                }
+            },
+            {
+                $project: {
+                    firstName: 1,
+                    lastName: 1,
+                    avatar: 1,
+                    profilePic: { $ifNull: ["$avatar", ""] },
+                    createdAt: 1,
+                    updatedAt: 1,
+                    problemSolved: { $ifNull: ["$problemSolved", []] },
+                    solvedCount: { $size: { $ifNull: ["$problemSolved", []] } }
+                }
+            },
+            {
+                $sort: {
+                    solvedCount: -1,
+                    updatedAt: 1,
+                    createdAt: 1
+                }
+            },
+            {
+                $limit: limit
+            },
+            {
+                $lookup: {
+                    from: "problems",
+                    localField: "problemSolved",
+                    foreignField: "_id",
+                    as: "solvedProblemsDetails"
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    firstName: 1,
+                    lastName: 1,
+                    avatar: 1,
+                    profilePic: 1,
+                    solvedCount: 1,
+                    easyCount: {
+                        $size: {
+                            $filter: {
+                                input: "$solvedProblemsDetails",
+                                as: "p",
+                                cond: { $eq: ["$$p.difficulty", "easy"] }
+                            }
+                        }
+                    },
+                    mediumCount: {
+                        $size: {
+                            $filter: {
+                                input: "$solvedProblemsDetails",
+                                as: "p",
+                                cond: { $eq: ["$$p.difficulty", "medium"] }
+                            }
+                        }
+                    },
+                    hardCount: {
+                        $size: {
+                            $filter: {
+                                input: "$solvedProblemsDetails",
+                                as: "p",
+                                cond: { $eq: ["$$p.difficulty", "hard"] }
+                            }
+                        }
+                    }
+                }
+            }
+        ];
+
+        const results = await User.aggregate(pipeline);
+        const rankedUsers = results.map((u, idx) => ({
+            rank: idx + 1,
+            _id: u._id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            avatar: u.avatar || u.profilePic || '',
+            solvedCount: u.solvedCount || 0,
+            easyCount: u.easyCount || 0,
+            mediumCount: u.mediumCount || 0,
+            hardCount: u.hardCount || 0
+        }));
+
+        if (limit === 50) {
+            leaderboardCache = rankedUsers;
+            leaderboardCacheTime = now;
+        }
+
+        return res.status(200).json({
+            success: true,
+            leaderboard: rankedUsers,
+            cachedAt: new Date(now).toISOString()
+        });
+    } catch (err) {
+        console.error("getLeaderboard error:", err);
+        return res.status(500).json({ message: "Failed to fetch leaderboard: " + err.message });
+    }
+};
+
+module.exports = {register, login, logout, adminRegister, deleteProfile, getProfile, updateProfile, getUserRank, getActivityHeatmap, getLeaderboard};

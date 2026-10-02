@@ -540,33 +540,64 @@ export default function ProblemDiscussion({ problemId, user, onRequireAuth }) {
         /* ----------------------------------------------------------- */
         <div className="space-y-3">
           {loading ? (
-            <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-500">
-              <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs">Loading community discussions...</span>
+            <div className="space-y-3 animate-pulse select-none">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-zinc-800 shrink-0" />
+                      <div className="space-y-1">
+                        <div className="h-3.5 w-28 bg-zinc-800 rounded" />
+                        <div className="h-2.5 w-16 bg-zinc-800/60 rounded" />
+                      </div>
+                    </div>
+                    <div className="h-6 w-12 bg-zinc-800/70 rounded-lg" />
+                  </div>
+                  <div className="h-4 w-3/4 bg-zinc-800 rounded" />
+                  <div className="h-3 w-1/2 bg-zinc-800/60 rounded" />
+                </div>
+              ))}
             </div>
           ) : error ? (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 text-center">
               {error}
             </div>
           ) : filteredDiscussions.length === 0 ? (
-            <div className="py-12 px-4 text-center bg-zinc-900/50 border border-zinc-800 rounded-xl space-y-3">
+            <div className="py-12 px-4 text-center bg-zinc-900/50 border border-zinc-800 rounded-xl space-y-3 select-none">
               <div className="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-400 mx-auto flex items-center justify-center">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div className="space-y-1">
-                <h3 className="text-sm font-bold text-white">No discussions yet</h3>
+                <h3 className="text-sm font-bold text-white">
+                  {searchQuery.trim() ? 'No discussions found' : 'No discussions yet'}
+                </h3>
                 <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                  Be the first to share your solution, ask a question, or discuss time complexities!
+                  {searchQuery.trim()
+                    ? `No discussions match "${searchQuery}". Try a different search keyword.`
+                    : 'No discussions yet. Be the first to share an approach or ask a question!'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleOpenNewPost}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create First Post</span>
-              </button>
+              {searchQuery.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="mt-1 text-xs font-bold text-indigo-400 hover:underline cursor-pointer"
+                >
+                  Clear search
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleOpenNewPost}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create First Post</span>
+                </button>
+              )}
             </div>
           ) : (
             filteredDiscussions.map((d) => {

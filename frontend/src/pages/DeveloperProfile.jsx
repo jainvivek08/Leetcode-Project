@@ -117,6 +117,13 @@ function DeveloperProfile() {
     totalActiveDays: 0,
   });
 
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  // Set dynamic document title
+  useEffect(() => {
+    document.title = 'Profile | CodeQuest';
+  }, []);
+
   // Modal and Toast states
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [toast, setToast] = useState({
@@ -138,7 +145,7 @@ function DeveloperProfile() {
 
     const fetchData = async () => {
       try {
-        const { data: allProbs } = await axiosClient.get('/problem/getAllProblem');
+        const { data: allProbs } = await axiosClient.get('/problem/all-lite');
         const probList = Array.isArray(allProbs) ? allProbs : (allProbs?.problems || []);
         if (isMounted && probList.length > 0) {
           setAllProblems(probList);
@@ -179,6 +186,10 @@ function DeveloperProfile() {
         } catch (err) {
           console.warn('Could not fetch activity heatmap:', err);
         }
+      }
+
+      if (isMounted) {
+        setLoadingProfile(false);
       }
     };
 
@@ -521,7 +532,53 @@ function DeveloperProfile() {
           {/* Right Column: Live Donut, Badges, Heatmap & Solved Problems Feed (8 cols on lg, 9 on xl) */}
           <section className="lg:col-span-8 xl:col-span-9 space-y-5">
             {/* Section 1: Live Donut & Solved Counts */}
-            <StatsDonut stats={liveStats} />
+            {loadingProfile ? (
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs animate-pulse select-none">
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+                  <div className="h-4 w-32 bg-slate-200 rounded" />
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-12 bg-slate-100 rounded" />
+                    <div className="h-4 w-12 bg-slate-100 rounded" />
+                    <div className="h-4 w-12 bg-slate-100 rounded" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                  <div className="md:col-span-5 flex items-center justify-center p-2">
+                    <div className="w-36 h-36 rounded-full border-8 border-slate-200 bg-slate-50 flex items-center justify-center">
+                      <div className="space-y-1.5 text-center">
+                        <div className="h-5 w-12 bg-slate-200 rounded mx-auto" />
+                        <div className="h-3 w-16 bg-slate-100 rounded mx-auto" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="md:col-span-7 space-y-3">
+                    <div className="p-3 bg-slate-50 rounded-xl space-y-2">
+                      <div className="flex justify-between">
+                        <div className="h-3.5 w-16 bg-slate-200 rounded" />
+                        <div className="h-3.5 w-12 bg-slate-200 rounded" />
+                      </div>
+                      <div className="h-2 bg-slate-200 rounded-full w-full" />
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl space-y-2">
+                      <div className="flex justify-between">
+                        <div className="h-3.5 w-16 bg-slate-200 rounded" />
+                        <div className="h-3.5 w-12 bg-slate-200 rounded" />
+                      </div>
+                      <div className="h-2 bg-slate-200 rounded-full w-full" />
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl space-y-2">
+                      <div className="flex justify-between">
+                        <div className="h-3.5 w-16 bg-slate-200 rounded" />
+                        <div className="h-3.5 w-12 bg-slate-200 rounded" />
+                      </div>
+                      <div className="h-2 bg-slate-200 rounded-full w-full" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <StatsDonut stats={liveStats} />
+            )}
 
             {/* Section 2: Dynamic Badges Carousel */}
             <BadgesCarousel
@@ -531,15 +588,28 @@ function DeveloperProfile() {
             />
 
             {/* Section 3: Submissions Heatmap Calendar */}
-            <ActivityHeatmap
-              totalSubmissions={solvedProblems.length}
-              currentStreak={heatmapData.currentStreak}
-              maxStreak={heatmapData.maxStreak}
-              totalActiveDays={heatmapData.totalActiveDays}
-              activityMap={heatmapData.activityMap}
-              submissions={solvedProblems}
-              onDayClick={handleDayClick}
-            />
+            {loadingProfile ? (
+              <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs animate-pulse select-none space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="h-4 w-36 bg-slate-200 rounded" />
+                  <div className="flex gap-3">
+                    <div className="h-4 w-16 bg-slate-200 rounded" />
+                    <div className="h-4 w-16 bg-slate-200 rounded" />
+                  </div>
+                </div>
+                <div className="h-28 bg-slate-100/80 rounded-xl w-full" />
+              </div>
+            ) : (
+              <ActivityHeatmap
+                totalSubmissions={solvedProblems.length}
+                currentStreak={heatmapData.currentStreak}
+                maxStreak={heatmapData.maxStreak}
+                totalActiveDays={heatmapData.totalActiveDays}
+                activityMap={heatmapData.activityMap}
+                submissions={solvedProblems}
+                onDayClick={handleDayClick}
+              />
+            )}
 
             {/* Section 4: Live Solved Problems Feed */}
             <RecentSubmissions

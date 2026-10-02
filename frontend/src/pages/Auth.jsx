@@ -6,7 +6,6 @@ import { getApiErrorMessage } from '../utils/axiosClient';
 import AuthNavbar from '../components/auth/AuthNavbar';
 import AuthFooter from '../components/auth/AuthFooter';
 import AuthBackground from '../components/auth/AuthBackground';
-import ForgotPasswordModal from '../components/auth/ForgotPasswordModal';
 
 function Auth({ defaultMode }) {
   const dispatch = useDispatch();
@@ -34,9 +33,6 @@ function Auth({ defaultMode }) {
 
   // Local submit loading state
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Forgot password modal state
-  const [isForgotOpen, setIsForgotOpen] = useState(false);
 
   // Toast feedback state
   const [toast, setToast] = useState({
@@ -194,12 +190,6 @@ function Auth({ defaultMode }) {
   // Social Login handler
   const handleSocialLogin = (provider) => {
     triggerToast(`Connecting with ${provider}...`, '🔄');
-  };
-
-  // Forgot password submit
-  const handleForgotSubmit = (submittedEmail) => {
-    setIsForgotOpen(false);
-    triggerToast(`Password reset link sent to ${submittedEmail || 'your email'}`, '✉️');
   };
 
   const isLoading = isSubmitting || reduxLoading;
@@ -449,7 +439,13 @@ function Auth({ defaultMode }) {
           <div className="flex items-center justify-between text-xs mt-3 pt-2.5 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setIsForgotOpen(true)}
+              onClick={() =>
+                triggerToast(
+                  'Password reset via email is coming soon! Please contact your administrator to reset credentials.',
+                  'ℹ️'
+                )
+              }
+              title="Password reset via administrator"
               className="text-slate-500 hover:text-slate-800 transition cursor-pointer"
             >
               Forgot Password?
@@ -567,14 +563,7 @@ function Auth({ defaultMode }) {
       {/* 3. COMPACT FOOTER */}
       <AuthFooter />
 
-      {/* 4. FORGOT PASSWORD MODAL */}
-      <ForgotPasswordModal
-        isOpen={isForgotOpen}
-        onClose={() => setIsForgotOpen(false)}
-        onSubmit={handleForgotSubmit}
-      />
-
-      {/* 5. TOAST NOTIFICATION */}
+      {/* 4. TOAST NOTIFICATION */}
       <div
         className={`fixed bottom-6 right-6 z-50 bg-white border border-slate-200 text-slate-800 px-4 py-2.5 rounded-xl shadow-xl text-xs flex items-center space-x-2.5 transform transition-all duration-300 ${
           toast.show

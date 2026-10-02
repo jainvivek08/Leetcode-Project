@@ -117,30 +117,57 @@ You are an expert Data Structures and Algorithms (DSA) tutor specializing in hel
 Remember: Your goal is to help users learn and understand DSA concepts through the lens of the current problem, not just to provide quick answers.
 `;
 
+        const primaryModel = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+        const fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-1.5-pro';
+
         let response;
         try {
             response = await ai.models.generateContent({
-                model: "gemini-3.6-flash",
+                model: primaryModel,
                 contents: validContents,
                 config: { systemInstruction }
             });
         } catch (firstErr) {
-            console.warn("Primary model gemini-3.6-flash failed, falling back to gemini-3.5-flash:", firstErr.message);
-            response = await ai.models.generateContent({
-                model: "gemini-3.5-flash",
-                contents: validContents,
-                config: { systemInstruction }
-            });
+            console.warn(`Primary model ${primaryModel} failed (${firstErr.message}), falling back to ${fallbackModel}...`);
+            if (fallbackModel && fallbackModel !== primaryModel) {
+                response = await ai.models.generateContent({
+                    model: fallbackModel,
+                    contents: validContents,
+                    config: { systemInstruction }
+                });
+            } else {
+                throw firstErr;
+            }
         }
 
-        res.status(201).json({
+        return res.status(201).json({
             message: response.text
         });
     }
     catch(err){
-        console.error("solveDoubt error:", err);
-        res.status(500).json({
-            message: "Internal server error: " + err.message
+        console.error("solveDoubt error:", err.message || err);
+
+        const errMsg = String(err.message || '');
+        const errStatus = err.status || err.statusCode || (err.response && err.response.status);
+
+        const isRateLimit = errStatus === 429 || /429|quota|rate limit|resource_exhausted/i.test(errMsg);
+        const isNotFound = errStatus === 404 || /404|not found/i.test(errMsg);
+        const isUnavailable = errStatus === 503 || /503|unavailable|overloaded/i.test(errMsg);
+
+        if (isRateLimit) {
+            return res.status(429).json({
+                message: "AI helper is busy or unavailable, please try again in a moment."
+            });
+        }
+
+        if (isNotFound || isUnavailable) {
+            return res.status(503).json({
+                message: "AI helper is busy or unavailable, please try again in a moment."
+            });
+        }
+
+        return res.status(503).json({
+            message: "AI helper is busy or unavailable, please try again in a moment."
         });
     }
 }

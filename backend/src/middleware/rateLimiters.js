@@ -30,6 +30,7 @@ const isSkippedGeneralRoute = (req) => {
   const rawPath = req.originalUrl
     ? req.originalUrl.split('?')[0].replace(/\/+$/, '')
     : (req.path || '').replace(/\/+$/, '');
+  const normalizedPath = rawPath.startsWith('/api/') ? rawPath.slice(4) : (rawPath === '/api' ? '' : rawPath);
   const skippedPaths = [
     '/user/check',
     '/problem/getAllProblem',
@@ -39,8 +40,13 @@ const isSkippedGeneralRoute = (req) => {
     '/user/getRank',
     '/user/activity-heatmap',
     '/problem/daily-challenge',
+    '/problem/all-lite',
+    '/health',
+    '/user/bookmarks',
+    '/leaderboard',
+    '/user/leaderboard',
   ];
-  return skippedPaths.includes(rawPath);
+  return skippedPaths.includes(rawPath) || skippedPaths.includes(normalizedPath);
 };
 
 /**

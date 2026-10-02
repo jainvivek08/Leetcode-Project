@@ -5,6 +5,7 @@ const { app } = require('../src/index');
 const User = require('../src/models/user');
 const Problem = require('../src/models/problem');
 const redisClient = require('../src/config/redis');
+const { connectTestDb, disconnectTestDb } = require('./testHelper');
 
 describe('Auth & Security Integration Tests', () => {
   let server;
@@ -13,9 +14,7 @@ describe('Auth & Security Integration Tests', () => {
   let testProblemId = null;
 
   before(async () => {
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(process.env.DB_CONNECT_STRING);
-    }
+    await connectTestDb();
     try {
       if (!redisClient.isOpen) {
         await redisClient.connect();
@@ -62,9 +61,7 @@ describe('Auth & Security Integration Tests', () => {
         await redisClient.quit();
       }
     } catch (_) {}
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.disconnect();
-    }
+    await disconnectTestDb();
   });
 
   test('registration strictly rejects mass assignment attempts (role: admin)', async () => {
@@ -77,7 +74,7 @@ describe('Auth & Security Integration Tests', () => {
       isAdmin: true
     };
 
-    const res = await fetch(`${baseUrl}/user/register`, {
+    const res = await fetch(`${baseUrl}/api/user/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(maliciousPayload)
@@ -97,16 +94,16 @@ describe('Auth & Security Integration Tests', () => {
   });
 
   test('public problem endpoints do not leak referenceSolution or hiddenTestCases', async () => {
-    // 1. Check GET /problem/problemById/:id
-    const resDetail = await fetch(`${baseUrl}/problem/problemById/${testProblemId}`);
+    // 1. Check GET /api/problem/problemById/:id
+    const resDetail = await fetch(`${baseUrl}/api/problem/problemById/${testProblemId}`);
     assert.strictEqual(resDetail.status, 200);
     const problemDetail = await resDetail.json();
 
     assert.strictEqual(problemDetail.referenceSolution, undefined, 'referenceSolution must not be exposed in problem detail');
     assert.strictEqual(problemDetail.hiddenTestCases, undefined, 'hiddenTestCases must not be exposed in problem detail');
 
-    // 2. Check GET /problem/list
-    const resList = await fetch(`${baseUrl}/problem/list?limit=10`);
+    // 2. Check GET /api/problem/list
+    const resList = await fetch(`${baseUrl}/api/problem/list?limit=10`);
     assert.strictEqual(resList.status, 200);
     const listData = await resList.json();
     assert.ok(Array.isArray(listData.problems));
@@ -114,6 +111,92 @@ describe('Auth & Security Integration Tests', () => {
     for (const prob of listData.problems) {
       assert.strictEqual(prob.referenceSolution, undefined, 'Problem in list must not expose referenceSolution');
       assert.strictEqual(prob.hiddenTestCases, undefined, 'Problem in list must not expose hiddenTestCases');
+    }
+  });
+
+  test('safe account deletion requires currentPassword and rejects invalid passwords', async () => {
+    // 1. Create a dedicated user for deletion test
+    const userEmail = `deltest_${Date.now()}@codequest.dev`;
+    const regRes = await fetch(`${baseUrl}/api/user/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Delete',
+        lastName: 'Tester',
+        emailId: userEmail,
+        password: 'ValidPassword123!',
+      })
+    });
+    assert.strictEqual(regRes.status, 201);
+    const regData = await regRes.json();
+    const delUserId = regData.user._id;
+    const cookieHeader = regRes.headers.get('set-cookie');
+    assert.ok(cookieHeader, 'Registration must return auth cookie');
+
+    // 2. Attempt deletion with NO password
+    const noPassRes = await fetch(`${baseUrl}/api/user/deleteProfile`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': cookieHeader
+      },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(noPassRes.status, 401);
+    const noPassData = await noPassRes.json();
+    assert.strictEqual(noPassData.message, 'Invalid current password');
+
+    // 3. Attempt deletion with WRONG password
+    const wrongPassRes = await fetch(`${baseUrl}/api/user/deleteProfile`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': cookieHeader
+      },
+      body: JSON.stringify({ currentPassword: 'WrongPassword999!' })
+    });
+    assert.strictEqual(wrongPassRes.status, 401);
+    const wrongPassData = await wrongPassRes.json();
+    assert.strictEqual(wrongPassData.message, 'Invalid current password');
+
+    // User should still exist in database
+    const userStillExists = await User.findById(delUserId);
+    assert.ok(userStillExists, 'User must not be deleted after incorrect password');
+
+    // 4. Attempt deletion with CORRECT password
+    const correctPassRes = await fetch(`${baseUrl}/api/user/deleteProfile`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': cookieHeader
+      },
+      body: JSON.stringify({ currentPassword: 'ValidPassword123!' })
+    });
+    assert.strictEqual(correctPassRes.status, 200);
+    const correctData = await correctPassRes.json();
+    assert.strictEqual(correctData.message, 'Account deleted successfully');
+
+    // User should be completely removed from database
+    const userDeleted = await User.findById(delUserId);
+    assert.strictEqual(userDeleted, null, 'User must be deleted from database');
+  });
+
+  test('test isolation helper rejects identical test and production database URIs', () => {
+    const { getTestMongoUri } = require('./testHelper');
+    const originalTestUri = process.env.MONGO_TEST_URI;
+    const originalMainUri = process.env.DB_CONNECT_STRING;
+
+    try {
+      // Simulate missing test URI
+      delete process.env.MONGO_TEST_URI;
+      assert.throws(() => getTestMongoUri(), /isolated test database/);
+
+      // Simulate identical test and production URIs
+      process.env.MONGO_TEST_URI = originalMainUri;
+      assert.throws(() => getTestMongoUri(), /isolated test database/);
+    } finally {
+      process.env.MONGO_TEST_URI = originalTestUri;
+      process.env.DB_CONNECT_STRING = originalMainUri;
     }
   });
 });

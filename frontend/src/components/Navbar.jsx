@@ -13,6 +13,7 @@ import {
   PlusCircle,
   Sliders,
   ChevronDown,
+  Trophy,
 } from 'lucide-react';
 import { ProfileDropdown } from './profile/ProfileDropdown';
 import { logoutUser } from '../authSlice';
@@ -148,6 +149,19 @@ function Navbar() {
               }`}
             >
               <span>Playground</span>
+            </Link>
+
+            {/* Leaderboard Link */}
+            <Link
+              to="/leaderboard"
+              className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
+                currentPath === '/leaderboard'
+                  ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
+              }`}
+            >
+              <Trophy className="w-4 h-4 text-amber-500" />
+              <span>Leaderboard</span>
             </Link>
 
             {/* 4. Admin Menu (Visible only to admin users) */}
@@ -357,6 +371,20 @@ function Navbar() {
           >
             <Terminal className="w-4 h-4" />
             <span>Playground</span>
+          </Link>
+
+          {/* Leaderboard Mobile Link */}
+          <Link
+            to="/leaderboard"
+            onClick={() => setMobileMenuOpen(false)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
+              currentPath === '/leaderboard'
+                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <span>Leaderboard</span>
           </Link>
 
           {/* Admin Mobile Controls (Visible only to admin users) */}

@@ -607,10 +607,10 @@ const deleteProblem = async (req, res) => {
     // 3. Cascade delete all associated discussion threads
     await Discussion.deleteMany({ problemId });
 
-    // 4. $pull that problemId from problemSolved of all Users
+    // 4. $pull that problemId from problemSolved and bookmarks of all Users
     const userResult = await User.updateMany(
-      { problemSolved: problemId },
-      { $pull: { problemSolved: problemId } }
+      { $or: [{ problemSolved: problemId }, { bookmarks: problemId }] },
+      { $pull: { problemSolved: problemId, bookmarks: problemId } }
     );
     const userSolvedRefs = userResult.modifiedCount || 0;
 
@@ -843,6 +843,25 @@ const getAllProblem = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: "Error: " + err.message });
+  }
+};
+
+/**
+ * GET /problem/all-lite
+ * Returns unpaginated array of problems capped at 1000 items.
+ * Strictly excludes referenceSolution and hiddenTestCases.
+ */
+const getAllProblemLite = async (req, res, next) => {
+  try {
+    const problems = await Problem.find({})
+      .sort({ problemNumber: 1, _id: 1 })
+      .limit(1000)
+      .select('_id problemNumber slug title difficulty tags')
+      .lean();
+
+    return res.status(200).json(problems);
+  } catch (err) {
+    next(err);
   }
 };
 
@@ -1087,6 +1106,78 @@ const getDailyChallenge = async (req, res) => {
   }
 };
 
+const toggleBookmark = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.isValidObjectId(id)) {
+      return res.status(404).json({ message: "Problem not found" });
+    }
+
+    const problem = await Problem.findById(id).select('_id');
+    if (!problem) {
+      return res.status(404).json({ message: "Problem not found" });
+    }
+
+    const userId = req.result._id;
+    const user = await User.findById(userId).select('bookmarks');
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const currentBookmarks = Array.isArray(user.bookmarks) ? user.bookmarks.map((b) => b.toString()) : [];
+    const isBookmarked = currentBookmarks.includes(id.toString());
+
+    let updatedUser;
+    if (isBookmarked) {
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $pull: { bookmarks: id } },
+        { new: true }
+      ).select('bookmarks');
+    } else {
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $addToSet: { bookmarks: id } },
+        { new: true }
+      ).select('bookmarks');
+    }
+
+    const bookmarksCount = updatedUser?.bookmarks?.length || 0;
+
+    return res.status(200).json({
+      success: true,
+      bookmarked: !isBookmarked,
+      bookmarksCount,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Error: " + err.message });
+  }
+};
+
+const getUserBookmarks = async (req, res) => {
+  try {
+    const userId = req.result._id;
+    const user = await User.findById(userId)
+      .populate({
+        path: 'bookmarks',
+        select: '_id problemNumber slug title difficulty tags',
+      })
+      .select('bookmarks')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      bookmarks: user.bookmarks || [],
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Error: " + err.message });
+  }
+};
+
 module.exports = {
   createProblem,
   updateProblem,
@@ -1096,9 +1187,12 @@ module.exports = {
   getAdminProblemById,
   getAdminProblemList,
   getAllProblem,
+  getAllProblemLite,
   getProblemTags,
   getProblemList,
   getDailyChallenge,
   solvedAllProblembyUser,
   submittedProblem,
+  toggleBookmark,
+  getUserBookmarks,
 };

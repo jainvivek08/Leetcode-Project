@@ -16,7 +16,7 @@ const AdminVideo = () => {
   const fetchProblems = async () => {
     try {
       setLoading(true);
-      const { data } = await axiosClient.get('/problem/getAllProblem');
+      const { data } = await axiosClient.get('/problem/all-lite');
       setProblems(Array.isArray(data) ? data : (data?.problems || []));
     } catch (err) {
       setError('Failed to fetch problems');
