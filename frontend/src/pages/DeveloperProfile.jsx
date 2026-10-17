@@ -491,7 +491,7 @@ function DeveloperProfile() {
       <ProfileNavbar
         user={fullProfileWithComputed}
         userInitial={profile.avatarInitial}
-        streakCount={solvedProblems.length > 0 ? 1 : 0}
+        streakCount={user?.streakCount ?? (solvedProblems.length > 0 ? 1 : 0)}
         onNotificationClick={() => triggerToast('No new notifications', '🔔')}
         onAppearance={() => navigate('/settings?tab=appearance')}
         onSettings={() => navigate('/settings')}

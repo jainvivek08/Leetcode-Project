@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import Editor from '@monaco-editor/react';
 import { useParams } from 'react-router';
 import axiosClient, { getApiErrorMessage } from "../utils/axiosClient"
+import { updateUserLocally } from '../authSlice';
 import SubmissionHistory from "../components/SubmissionHistory"
 import ChatAi from '../components/ChatAi';
 import Editorial from '../components/Editorial';
@@ -15,6 +17,8 @@ const langMap = {
 
 
 const ProblemPage = () => {
+  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const [problem, setProblem] = useState(null);
   const [selectedLanguage, setSelectedLanguage] = useState('javascript');
   const [code, setCode] = useState('');
@@ -113,6 +117,17 @@ const ProblemPage = () => {
       });
 
        setSubmitResult(response.data);
+       if (response.data?.accepted || response.data?.status === 'accepted') {
+         if (response.data?.streakCount !== undefined) {
+           dispatch(
+             updateUserLocally({
+               streakCount: response.data.streakCount,
+               lastSolvedDate: response.data.lastSolvedDate,
+               problemSolved: [...(user?.problemSolved || []), targetId],
+             })
+           );
+         }
+       }
        setLoading(false);
        setActiveRightTab('result');
       

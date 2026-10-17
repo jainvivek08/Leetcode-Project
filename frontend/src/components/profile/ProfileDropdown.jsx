@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Palette, Settings, LogOut, Sun, Moon, Shield, PlusCircle, Sliders } from 'lucide-react';
+import { User, Palette, Settings, LogOut, Sun, Moon, Shield, LayoutDashboard } from 'lucide-react';
 import { useTheme } from '../../utils/theme';
 
 /**
@@ -125,14 +125,14 @@ export function ProfileDropdown({
           role="menu"
           aria-orientation="vertical"
           aria-labelledby="profile-menu-button"
-          className="absolute right-0 mt-2 w-64 bg-white/98 dark:bg-slate-900/98 backdrop-blur-md rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/60 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none"
+          className="absolute right-0 mt-2 w-64 bg-zinc-900/98 backdrop-blur-md rounded-2xl border border-zinc-800 shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none text-zinc-100"
         >
           {/* 1. Header (User Identity) */}
-          <div className="px-3.5 py-2.5 border-b border-slate-100 dark:border-slate-800">
-            <p className="text-xs font-black text-slate-900 dark:text-white tracking-tight truncate">
+          <div className="px-3.5 py-2.5 border-b border-zinc-800">
+            <p className="text-xs font-black text-zinc-100 tracking-tight truncate">
               {displayName}
             </p>
-            <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+            <p className="text-[11px] font-mono text-zinc-400 font-medium truncate mt-0.5">
               @{username}
             </p>
           </div>
@@ -149,14 +149,14 @@ export function ProfileDropdown({
                   else window.location.assign('/profile');
                 })
               }
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl hover:bg-blue-50/80 dark:hover:bg-slate-800/80 hover:text-[#2563eb] dark:hover:text-blue-400 transition cursor-pointer text-left group"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold text-zinc-300 rounded-xl hover:bg-zinc-800/80 hover:text-amber-400 transition cursor-pointer text-left group"
             >
-              <User className="w-4 h-4 text-slate-400 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors shrink-0" />
+              <User className="w-4 h-4 text-zinc-400 group-hover:text-amber-400 transition-colors shrink-0" />
               <span>My Profile</span>
             </button>
 
             {/* Appearance (Theme Quick Switcher) */}
-            <div className="px-3.5 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition">
+            <div className="px-3.5 py-2 rounded-xl hover:bg-zinc-800/60 transition">
               <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
@@ -171,14 +171,14 @@ export function ProfileDropdown({
                       }
                     })
                   }
-                  className="flex items-center gap-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-[#2563eb] dark:hover:text-blue-400 transition cursor-pointer text-left flex-1 group"
+                  className="flex items-center gap-2.5 text-xs font-semibold text-zinc-300 hover:text-amber-400 transition cursor-pointer text-left flex-1 group"
                 >
-                  <Palette className="w-4 h-4 text-slate-400 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors shrink-0" />
+                  <Palette className="w-4 h-4 text-zinc-400 group-hover:text-amber-400 transition-colors shrink-0" />
                   <span>Appearance</span>
                 </button>
 
                 {/* Dark / Light Pill Switcher */}
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center bg-zinc-950 p-0.5 rounded-lg border border-zinc-800">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -188,8 +188,8 @@ export function ProfileDropdown({
                     title="Light Theme"
                     className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
                       !isDark
-                        ? 'bg-white text-blue-600 shadow-2xs font-extrabold'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                        ? 'bg-zinc-800 text-amber-400 shadow-2xs font-extrabold'
+                        : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                   >
                     <Sun className="w-3 h-3 text-amber-500" />
@@ -204,11 +204,11 @@ export function ProfileDropdown({
                     title="Dark Theme"
                     className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
                       isDark
-                        ? 'bg-blue-600 text-white shadow-2xs font-extrabold'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                        ? 'bg-amber-500 text-zinc-950 shadow-2xs font-extrabold'
+                        : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                   >
-                    <Moon className="w-3 h-3 text-blue-200" />
+                    <Moon className="w-3 h-3" />
                     <span>Dark</span>
                   </button>
                 </div>
@@ -230,16 +230,16 @@ export function ProfileDropdown({
                   }
                 })
               }
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl hover:bg-blue-50/80 dark:hover:bg-slate-800/80 hover:text-[#2563eb] dark:hover:text-blue-400 transition cursor-pointer text-left group"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold text-zinc-300 rounded-xl hover:bg-zinc-800/80 hover:text-amber-400 transition cursor-pointer text-left group"
             >
-              <Settings className="w-4 h-4 text-slate-400 group-hover:text-[#2563eb] dark:group-hover:text-blue-400 transition-colors shrink-0" />
+              <Settings className="w-4 h-4 text-zinc-400 group-hover:text-amber-400 transition-colors shrink-0" />
               <span>Settings</span>
             </button>
 
             {/* Admin Controls (Visible only to admin users) */}
             {user?.role === 'admin' && (
-              <div className="pt-1 mt-1 border-t border-slate-100 dark:border-slate-800 space-y-0.5">
-                <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+              <div className="pt-1 mt-1 border-t border-zinc-800 space-y-0.5">
+                <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                   <Shield className="w-3 h-3" />
                   <span>Admin</span>
                 </div>
@@ -248,42 +248,28 @@ export function ProfileDropdown({
                   role="menuitem"
                   onClick={() =>
                     handleAction(() => {
-                      if (onNavigate) onNavigate('/admin/create');
-                      else window.location.assign('/admin/create');
+                      if (onNavigate) onNavigate('/admin');
+                      else window.location.assign('/admin');
                     })
                   }
-                  className="w-full flex items-center gap-3 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl hover:bg-blue-50/80 dark:hover:bg-slate-800/80 hover:text-[#2563eb] dark:hover:text-blue-400 transition cursor-pointer text-left group"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold text-zinc-300 rounded-xl hover:bg-zinc-800/80 hover:text-amber-400 transition cursor-pointer text-left group"
                 >
-                  <PlusCircle className="w-4 h-4 text-blue-500 group-hover:scale-105 transition-transform shrink-0" />
-                  <span>Create Problem</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() =>
-                    handleAction(() => {
-                      if (onNavigate) onNavigate('/admin/update');
-                      else window.location.assign('/admin/update');
-                    })
-                  }
-                  className="w-full flex items-center gap-3 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 rounded-xl hover:bg-blue-50/80 dark:hover:bg-slate-800/80 hover:text-[#2563eb] dark:hover:text-blue-400 transition cursor-pointer text-left group"
-                >
-                  <Sliders className="w-4 h-4 text-emerald-500 group-hover:scale-105 transition-transform shrink-0" />
-                  <span>Manage Problems</span>
+                  <LayoutDashboard className="w-4 h-4 text-amber-400 group-hover:scale-105 transition-transform shrink-0" />
+                  <span>Admin Panel</span>
                 </button>
               </div>
             )}
           </div>
 
           {/* 3. Footer Action */}
-          <div className="pt-1 mt-0.5 border-t border-slate-100 dark:border-slate-800">
+          <div className="pt-1 mt-0.5 border-t border-zinc-800">
             <button
               type="button"
               role="menuitem"
               onClick={() => handleAction(onLogout)}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 transition cursor-pointer text-left group"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-semibold text-zinc-400 rounded-xl hover:bg-rose-500/10 hover:text-rose-400 transition cursor-pointer text-left group"
             >
-              <LogOut className="w-4 h-4 text-slate-400 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors shrink-0" />
+              <LogOut className="w-4 h-4 text-zinc-500 group-hover:text-rose-400 transition-colors shrink-0" />
               <span>Logout</span>
             </button>
           </div>

@@ -931,10 +931,10 @@ function SettingsPage() {
 
       {/* 4. SAFE DELETE ACCOUNT CONFIRMATION MODAL */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-7 relative overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-7 relative overflow-hidden text-zinc-100">
             <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-900/60">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/20">
                 <Trash2 className="w-5 h-5" />
               </div>
               <button
@@ -944,26 +944,26 @@ function SettingsPage() {
                   setDeletePassword('');
                   setDeleteError('');
                 }}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg transition"
+                className="text-zinc-400 hover:text-zinc-200 p-1 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <h3 className="text-base font-black text-slate-900 dark:text-white">
+            <h3 className="text-base font-black text-zinc-100">
               Permanently Delete Account?
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
               This action cannot be undone. All your solved problems, code submissions, heatmaps, and ranking data will be permanently wiped.
             </p>
 
             <form onSubmit={handleConfirmDelete} className="mt-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
                   Confirm with Current Password
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
@@ -975,11 +975,11 @@ function SettingsPage() {
                       setDeletePassword(e.target.value);
                       if (deleteError) setDeleteError('');
                     }}
-                    className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20 transition font-mono"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20 transition font-mono"
                   />
                 </div>
                 {deleteError && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mt-1.5 font-medium">
+                  <p className="text-xs text-rose-400 flex items-center gap-1.5 mt-1.5 font-medium">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     {deleteError}
                   </p>
@@ -994,7 +994,7 @@ function SettingsPage() {
                     setDeletePassword('');
                     setDeleteError('');
                   }}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
+                  className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-xl transition"
                 >
                   Cancel
                 </button>

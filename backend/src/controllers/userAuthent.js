@@ -49,6 +49,8 @@ const register = async (req,res)=>{
             _id: user._id,
             role: user.role,
             problemSolved: [],
+            streakCount: 0,
+            lastSolvedDate: null,
         };
 
         res.cookie('token', token, getCookieOptions());
@@ -84,13 +86,30 @@ const login = async (req,res)=>{
         if(!match)
             throw new Error("Invalid Credentials");
 
+        if (user.lastSolvedDate) {
+            const now = new Date();
+            const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const lastMidnight = new Date(
+                user.lastSolvedDate.getFullYear(),
+                user.lastSolvedDate.getMonth(),
+                user.lastSolvedDate.getDate()
+            );
+            const diffDays = Math.round((todayMidnight - lastMidnight) / (1000 * 60 * 60 * 24));
+            if (diffDays > 1) {
+                user.streakCount = 0; // Display 0 until they solve a new question
+                await user.save();
+            }
+        }
+
         const reply = {
             firstName: user.firstName,
             lastName: user.lastName,
             emailId: user.emailId,
             _id: user._id,
             role: user.role,
-            problemSolved: user.problemSolved || []
+            problemSolved: user.problemSolved || [],
+            streakCount: user.streakCount || 0,
+            lastSolvedDate: user.lastSolvedDate || null,
         };
 
         const token = jwt.sign(
@@ -212,6 +231,20 @@ const getProfile = async (req, res) => {
         const user = await User.findById(userId).select('-password');
         if (!user) {
             return res.status(404).json({ message: "User not found" });
+        }
+        if (user.lastSolvedDate) {
+            const now = new Date();
+            const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const lastMidnight = new Date(
+                user.lastSolvedDate.getFullYear(),
+                user.lastSolvedDate.getMonth(),
+                user.lastSolvedDate.getDate()
+            );
+            const diffDays = Math.round((todayMidnight - lastMidnight) / (1000 * 60 * 60 * 24));
+            if (diffDays > 1) {
+                user.streakCount = 0; // Display 0 until they solve a new question
+                await user.save();
+            }
         }
         res.status(200).json({ user, message: "Profile fetched successfully" });
     } catch (err) {

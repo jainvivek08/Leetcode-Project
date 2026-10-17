@@ -286,16 +286,14 @@ node backend/scripts/seed_demo.js
 ```
 
 ### 2. Demo User Credentials
-> **Default Password**: `DemoPass@123` (or the value set in `DEMO_PASSWORD`)
+> **Canonical Demo Passwords**:
+> - Admin: `AdminPassword123!`
+> - User: `UserPassword123!`
 
-| Account Type | Email | Role | Seeded Stats |
-| :--- | :--- | :--- | :--- |
-| **Admin** | `admin@codequest.dev` | `admin` | Full problem authoring & management access |
-| **Coder #1** | `alex.chen@demo.com` | `user` | Rank #1, 14 Solved, 7-Day Active Streak |
-| **Coder #2** | `priya.sharma@demo.com` | `user` | Rank #2, 10 Solved, 5-Day Active Streak |
-| **Coder #3** | `marcus.vance@demo.com` | `user` | Rank #3, 7 Solved, 3-Day Active Streak |
-| **Coder #4** | `elena.rostova@demo.com` | `user` | Rank #4, 4 Solved, 2-Day Active Streak |
-| **Coder #5** | `david.kim@demo.com` | `user` | Rank #5, 2 Solved, 1-Day Active Streak |
+| Account Type | Email | Password | Role | Permissions |
+| :--- | :--- | :--- | :--- | :--- |
+| **Admin** | `admin@codequest.com` | `AdminPassword123!` | `admin` | Full problem authoring & management access |
+| **Demo User** | `user@codequest.com` | `UserPassword123!` | `user` | Standard problem solver & coding arena access |
 
 ---
 
@@ -339,7 +337,7 @@ node backend/scripts/seed_demo.js
    - View your 365-day submission activity heatmap, persistent streak calculation, and solve breakdown.
 
 8. **Admin Management Panel**:
-   - Sign out and log in as `admin@codequest.dev`.
+   - Sign out and log in as `admin@codequest.com`.
    - Click **Admin** in the navigation bar.
    - Navigate to `/admin/create` to publish a new challenge with hidden test cases and starter templates, or `/admin/update` to edit existing problems.
 

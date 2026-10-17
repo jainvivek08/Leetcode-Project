@@ -26,8 +26,7 @@ import {
   Braces,
   Lightbulb,
   Tag,
-  Building2,
-  Lock,
+  Video,
   Flame,
   Check,
   ChevronDown,
@@ -38,11 +37,12 @@ import {
   Code2,
 } from 'lucide-react';
 import axiosClient, { getApiErrorMessage } from '../utils/axiosClient';
-import { logoutUser } from '../authSlice';
+import { logoutUser, updateUserLocally } from '../authSlice';
 import SubmissionHistory from '../components/SubmissionHistory';
 import ChatAi from '../components/ChatAi';
 import Editorial from '../components/Editorial';
 import ProblemDiscussion from '../components/discussion/ProblemDiscussion';
+import FormattedDescription from '../components/FormattedDescription';
 import ProfileDropdown from '../components/profile/ProfileDropdown';
 import AuthPromptModal from '../components/AuthPromptModal';
 import { normalizeTags, tagLabel } from '../utils/tags';
@@ -192,22 +192,57 @@ const LANG_CONFIG = {
 };
 
 /**
+ * Strict Language Normalizer
+ * Resolves language synonyms to canonical keys: 'javascript', 'python3', 'cpp', 'java'
+ */
+const normalizeLangKey = (lang) => {
+  if (!lang || typeof lang !== 'string') return 'javascript';
+  const l = lang.toLowerCase().trim();
+  if (l === 'js' || l === 'javascript') return 'javascript';
+  if (l === 'py' || l === 'python' || l === 'python3') return 'python3';
+  if (l === 'cpp' || l === 'c++') return 'cpp';
+  if (l === 'java') return 'java';
+  return 'javascript';
+};
+
+/**
+ * Maps canonical language key to Monaco Editor language mode:
+ * JavaScript -> 'javascript'
+ * Python -> 'python'
+ * C++ -> 'cpp'
+ * Java -> 'java'
+ */
+const getMonacoLanguage = (lang) => {
+  const norm = normalizeLangKey(lang);
+  switch (norm) {
+    case 'javascript':
+      return 'javascript';
+    case 'python3':
+      return 'python';
+    case 'cpp':
+      return 'cpp';
+    case 'java':
+      return 'java';
+    default:
+      return 'javascript';
+  }
+};
+
+/**
  * Helper to compute possible localStorage keys for drafts
  * Format: codequest_draft_${problemIdOrSlug}_${language}
  */
 const getDraftKeys = (problem, routeId, langKey) => {
+  const norm = normalizeLangKey(langKey);
   const ids = [];
   if (problem?.slug) ids.push(problem.slug);
   if (problem?._id && String(problem._id) !== problem?.slug) ids.push(String(problem._id));
   if (routeId && !ids.includes(routeId)) ids.push(routeId);
   if (ids.length === 0) ids.push('default-1614');
 
-  const langVariants = [];
-  if (langKey) {
-    langVariants.push(langKey);
-    const label = LANG_CONFIG[langKey]?.label;
-    if (label && !langVariants.includes(label)) langVariants.push(label);
-  }
+  const langVariants = [norm];
+  const label = LANG_CONFIG[norm]?.label;
+  if (label && !langVariants.includes(label)) langVariants.push(label);
 
   const keys = [];
   for (const id of ids) {
@@ -218,12 +253,200 @@ const getDraftKeys = (problem, routeId, langKey) => {
   return keys;
 };
 
+/**
+ * Dynamic Boilerplate Generator
+ * Provides standard language-specific starter template/boilerplate with function stub.
+ * Strictly maps to the requested language and never defaults to Java when JavaScript is selected.
+ */
+const generateDefaultBoilerplate = (problemOrTitle = 'Solution', lang = 'javascript') => {
+  const normLang = normalizeLangKey(lang);
+  const probTitle =
+    typeof problemOrTitle === 'object' && problemOrTitle !== null
+      ? problemOrTitle.title || 'Solution'
+      : String(problemOrTitle || 'Solution');
+  const cleanTitle = probTitle.replace(/^#?\d+\.\s*/, '').trim() || 'Solution';
+  const isMaxSubArray =
+    (typeof problemOrTitle === 'object' &&
+      problemOrTitle !== null &&
+      (problemOrTitle.problemNumber === 13 || problemOrTitle.slug === 'maximum-subarray')) ||
+    cleanTitle.toLowerCase().includes('maximum subarray');
+
+  switch (normLang) {
+    case 'javascript': {
+      if (isMaxSubArray) {
+        return `const readline = require('readline');
+
+function maxSubArray(nums) {
+    // Write your code here
+    return 0;
+}
+
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+    if (!line.trim()) return;
+    const nums = line.trim().split(/\\s+/).map(Number);
+    console.log(maxSubArray(nums));
+});
+`;
+      }
+      return `/**
+ * Problem: ${cleanTitle}
+ * @param {any} input
+ * @return {any}
+ */
+function solution(input) {
+    // Write your code here
+}
+`;
+    }
+
+    case 'python3': {
+      if (isMaxSubArray) {
+        return `import sys
+
+def maxSubArray(nums):
+    # Write your code here
+    return 0
+
+def main():
+    input_data = sys.stdin.read().split()
+    if not input_data:
+        return
+    nums = [int(x) for x in input_data]
+    print(maxSubArray(nums))
+
+if __name__ == '__main__':
+    main()
+`;
+      }
+      return `"""
+Problem: ${cleanTitle}
+"""
+
+def solution(input_data):
+    # Write your code here
+    pass
+`;
+    }
+
+    case 'cpp': {
+      if (isMaxSubArray) {
+        return `#include <iostream>
+#include <vector>
+#include <sstream>
+using namespace std;
+
+int maxSubArray(const vector<int>& nums) {
+    // Write your code here
+    return 0;
+}
+
+int main() {
+    string line;
+    if (getline(cin, line)) {
+        stringstream ss(line);
+        int val;
+        vector<int> nums;
+        while (ss >> val) nums.push_back(val);
+        cout << maxSubArray(nums) << endl;
+    }
+    return 0;
+}
+`;
+      }
+      return `// Problem: ${cleanTitle}
+#include <iostream>
+#include <vector>
+using namespace std;
+
+int main() {
+    // Write your solution here
+    return 0;
+}
+`;
+    }
+
+    case 'java': {
+      if (isMaxSubArray) {
+        return `import java.util.*;
+import java.io.*;
+
+public class Main {
+    public static int maxSubArray(int[] nums) {
+        // Write your code here
+        return 0;
+    }
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String line = br.readLine();
+        if (line == null || line.trim().isEmpty()) return;
+        String[] parts = line.trim().split("\\\\s+");
+        int[] nums = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) nums[i] = Integer.parseInt(parts[i]);
+        System.out.println(maxSubArray(nums));
+    }
+}
+`;
+      }
+      return `// Problem: ${cleanTitle}
+import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        // Write your solution here
+    }
+}
+`;
+    }
+
+    default:
+      return `/**
+ * Problem: ${cleanTitle}
+ * @param {any} input
+ * @return {any}
+ */
+function solution(input) {
+    // Write your code here
+}
+`;
+  }
+};
+
 const loadSavedDraft = (problem, routeId, langKey) => {
+  const normLang = normalizeLangKey(langKey);
   try {
-    const keys = getDraftKeys(problem, routeId, langKey);
+    const keys = getDraftKeys(problem, routeId, normLang);
     for (const k of keys) {
       const val = localStorage.getItem(k);
-      if (val !== null && val !== undefined) {
+      if (val !== null && val !== undefined && typeof val === 'string' && val.trim().length > 0) {
+        const trimmed = val.trim();
+        // Purge cross-language contaminated drafts in localStorage
+        if (normLang === 'javascript') {
+          if (/public\s+class\s+Main/i.test(trimmed) || /import\s+java\./i.test(trimmed) || /#include\s*</i.test(trimmed)) {
+            console.warn(`Purging contaminated Java/C++ draft found in JavaScript key: ${k}`);
+            localStorage.removeItem(k);
+            continue;
+          }
+        } else if (normLang === 'python3') {
+          if (/public\s+class\s+Main/i.test(trimmed) || /#include\s*</i.test(trimmed) || /function\s+[a-zA-Z0-9_]+/i.test(trimmed)) {
+            console.warn(`Purging contaminated draft found in Python key: ${k}`);
+            localStorage.removeItem(k);
+            continue;
+          }
+        } else if (normLang === 'cpp') {
+          if (/public\s+class\s+Main/i.test(trimmed) || /import\s+java\./i.test(trimmed)) {
+            console.warn(`Purging contaminated draft found in C++ key: ${k}`);
+            localStorage.removeItem(k);
+            continue;
+          }
+        } else if (normLang === 'java') {
+          if (/#include\s*</i.test(trimmed) || (/function\s+[a-zA-Z0-9_]+/i.test(trimmed) && !trimmed.includes('class'))) {
+            console.warn(`Purging contaminated draft found in Java key: ${k}`);
+            localStorage.removeItem(k);
+            continue;
+          }
+        }
         return val;
       }
     }
@@ -234,19 +457,20 @@ const loadSavedDraft = (problem, routeId, langKey) => {
 };
 
 const saveDraftToStorage = (problem, routeId, langKey, codeContent) => {
-  if (codeContent === undefined || codeContent === null) return;
+  if (!codeContent || typeof codeContent !== 'string' || codeContent.trim().length === 0) return;
+  const norm = normalizeLangKey(langKey);
   try {
     const primaryId = problem?.slug || problem?._id || routeId || 'default-1614';
-    const label = LANG_CONFIG[langKey]?.label || langKey;
+    const label = LANG_CONFIG[norm]?.label || norm;
 
-    localStorage.setItem(`codequest_draft_${primaryId}_${langKey}`, codeContent);
-    if (label && label !== langKey) {
+    localStorage.setItem(`codequest_draft_${primaryId}_${norm}`, codeContent);
+    if (label && label !== norm) {
       localStorage.setItem(`codequest_draft_${primaryId}_${label}`, codeContent);
     }
 
     if (problem?.slug && problem?._id && String(problem._id) !== problem.slug) {
-      localStorage.setItem(`codequest_draft_${problem._id}_${langKey}`, codeContent);
-      if (label && label !== langKey) {
+      localStorage.setItem(`codequest_draft_${problem._id}_${norm}`, codeContent);
+      if (label && label !== norm) {
         localStorage.setItem(`codequest_draft_${problem._id}_${label}`, codeContent);
       }
     }
@@ -256,8 +480,9 @@ const saveDraftToStorage = (problem, routeId, langKey, codeContent) => {
 };
 
 const clearDraftFromStorage = (problem, routeId, langKey) => {
+  const norm = normalizeLangKey(langKey);
   try {
-    const keys = getDraftKeys(problem, routeId, langKey);
+    const keys = getDraftKeys(problem, routeId, norm);
     for (const k of keys) {
       localStorage.removeItem(k);
     }
@@ -267,25 +492,116 @@ const clearDraftFromStorage = (problem, routeId, langKey) => {
 };
 
 const getStarterCode = (prob, lang) => {
-  if (!prob) return '';
-  const langLabel = LANG_CONFIG[lang]?.label || lang || 'JavaScript';
-  const found = prob?.startCode?.find(
-    (sc) =>
-      sc.language?.toLowerCase() === lang.toLowerCase() ||
-      sc.language?.toLowerCase() === langLabel.toLowerCase()
-  );
-  if (found && found.initialCode) {
-    return found.initialCode;
+  const normLang = normalizeLangKey(lang);
+
+  if (!prob) {
+    return generateDefaultBoilerplate('Solution', normLang);
   }
-  if (lang === 'javascript') {
-    return `/**\n * Solution\n */\nfunction solve(input) {\n    // Write your code here\n    return 0;\n}`;
-  } else if (lang === 'cpp') {
-    return `#include <iostream>\n#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int solve() {\n        return 0;\n    }\n};`;
-  } else if (lang === 'java') {
-    return `class Solution {\n    public int solve() {\n        // Write code here\n        return 0;\n    }\n}`;
-  } else {
-    return `class Solution:\n    def solve(self) -> int:\n        # Write code here\n        return 0`;
+
+  // Helper: Strictly reject code that clearly belongs to another language
+  const isCandidateSane = (codeStr, targetLang) => {
+    if (!codeStr || typeof codeStr !== 'string' || codeStr.trim().length < 15) return false;
+    const t = codeStr.trim();
+    if (targetLang === 'javascript') {
+      if (/public\s+class\s+Main/i.test(t) || /import\s+java\./i.test(t) || /#include\s*</i.test(t)) {
+        return false;
+      }
+    } else if (targetLang === 'python3') {
+      if (/public\s+class\s+Main/i.test(t) || /#include\s*</i.test(t)) {
+        return false;
+      }
+    } else if (targetLang === 'cpp') {
+      if (/public\s+class\s+Main/i.test(t) || /import\s+java\./i.test(t)) {
+        return false;
+      }
+    } else if (targetLang === 'java') {
+      if (/#include\s*</i.test(t)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // 1. Check array format in prob.startCode
+  if (Array.isArray(prob.startCode)) {
+    const found = prob.startCode.find((sc) => {
+      const l = (sc.language || sc.lang || '').toLowerCase().trim();
+      if (normLang === 'javascript') {
+        return l === 'javascript' || l === 'js';
+      }
+      if (normLang === 'python3') {
+        return l === 'python3' || l === 'python' || l === 'py';
+      }
+      if (normLang === 'cpp') {
+        return l === 'cpp' || l === 'c++';
+      }
+      if (normLang === 'java') {
+        return l === 'java';
+      }
+      return false;
+    });
+
+    if (found && isCandidateSane(found.initialCode, normLang)) {
+      return found.initialCode;
+    }
   }
+
+  // 2. Check object format in prob.startCode
+  if (prob.startCode && typeof prob.startCode === 'object' && !Array.isArray(prob.startCode)) {
+    let candidate = null;
+    if (normLang === 'javascript') {
+      candidate = prob.startCode.javascript || prob.startCode.js || prob.startCode.JavaScript || prob.startCode.JS;
+    } else if (normLang === 'python3') {
+      candidate = prob.startCode.python3 || prob.startCode.python || prob.startCode.py || prob.startCode.Python3 || prob.startCode.Python;
+    } else if (normLang === 'cpp') {
+      candidate = prob.startCode.cpp || prob.startCode['c++'] || prob.startCode['C++'] || prob.startCode.Cpp;
+    } else if (normLang === 'java') {
+      candidate = prob.startCode.java || prob.startCode.Java;
+    }
+    if (candidate && isCandidateSane(candidate, normLang)) {
+      return candidate;
+    }
+  }
+
+  // 3. Check prob.starterCode (array or object)
+  if (Array.isArray(prob.starterCode)) {
+    const found = prob.starterCode.find((sc) => {
+      const l = (sc.language || sc.lang || '').toLowerCase().trim();
+      if (normLang === 'javascript') {
+        return l === 'javascript' || l === 'js';
+      }
+      if (normLang === 'python3') {
+        return l === 'python3' || l === 'python' || l === 'py';
+      }
+      if (normLang === 'cpp') {
+        return l === 'cpp' || l === 'c++';
+      }
+      if (normLang === 'java') {
+        return l === 'java';
+      }
+      return false;
+    });
+    if (found && isCandidateSane(found.initialCode, normLang)) {
+      return found.initialCode;
+    }
+  } else if (prob.starterCode && typeof prob.starterCode === 'object') {
+    let candidate = null;
+    if (normLang === 'javascript') {
+      candidate = prob.starterCode.javascript || prob.starterCode.js || prob.starterCode.JavaScript;
+    } else if (normLang === 'python3') {
+      candidate = prob.starterCode.python3 || prob.starterCode.python || prob.starterCode.py || prob.starterCode.Python;
+    } else if (normLang === 'cpp') {
+      candidate = prob.starterCode.cpp || prob.starterCode['c++'] || prob.starterCode['C++'];
+    } else if (normLang === 'java') {
+      candidate = prob.starterCode.java || prob.starterCode.Java;
+    }
+    if (candidate && isCandidateSane(candidate, normLang)) {
+      return candidate;
+    }
+  }
+
+  // 4. Guaranteed dynamic fallback boilerplate (strictly matching normLang, never defaulting to Java)
+  return generateDefaultBoilerplate(prob, normLang);
 };
 
 /**
@@ -518,7 +834,6 @@ function SolveProblemPage() {
   // Hint & Metadata accordions
   const [showHint, setShowHint] = useState(false);
   const [showTopics, setShowTopics] = useState(false);
-  const [showCompanies, setShowCompanies] = useState(false);
 
   // Right Pane: Code Editor States
   const [selectedLang, setSelectedLang] = useState('javascript');
@@ -540,10 +855,10 @@ function SolveProblemPage() {
     selectedLangRef.current = selectedLang;
   }, [selectedLang]);
 
-  // Ensure un-debounced changes are saved before navigating or refreshing
+  // Ensure un-debounced changes are saved before navigating or refreshing (only if code is non-empty)
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (codeRef.current !== undefined && codeRef.current !== null) {
+      if (codeRef.current && typeof codeRef.current === 'string' && codeRef.current.trim().length > 0) {
         saveDraftToStorage(problem, routeIdentifier, selectedLang, codeRef.current);
       }
     };
@@ -553,7 +868,7 @@ function SolveProblemPage() {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
-      if (codeRef.current !== undefined && codeRef.current !== null) {
+      if (codeRef.current && typeof codeRef.current === 'string' && codeRef.current.trim().length > 0) {
         saveDraftToStorage(problem, routeIdentifier, selectedLang, codeRef.current);
       }
     };
@@ -658,9 +973,10 @@ function SolveProblemPage() {
           if (!isMounted) return;
           setProblem(DEFAULT_PROBLEM);
           const savedDraft = loadSavedDraft(DEFAULT_PROBLEM, routeIdentifier, currentLang);
-          const initial = savedDraft !== null && savedDraft !== undefined
-            ? savedDraft
-            : getStarterCode(DEFAULT_PROBLEM, currentLang);
+          const initial =
+            savedDraft !== null && savedDraft !== undefined && savedDraft.trim().length > 0
+              ? savedDraft
+              : getStarterCode(DEFAULT_PROBLEM, currentLang);
           setCode(initial);
           codeRef.current = initial;
           setCustomInput(DEFAULT_PROBLEM.visibleTestCases?.[0]?.input || '');
@@ -697,9 +1013,10 @@ function SolveProblemPage() {
           };
           setProblem(formattedProblem);
           const savedDraft = loadSavedDraft(formattedProblem, routeIdentifier, currentLang);
-          const initial = savedDraft !== null && savedDraft !== undefined
-            ? savedDraft
-            : getStarterCode(formattedProblem, currentLang);
+          const initial =
+            savedDraft !== null && savedDraft !== undefined && savedDraft.trim().length > 0
+              ? savedDraft
+              : getStarterCode(formattedProblem, currentLang);
           setCode(initial);
           codeRef.current = initial;
           setCustomInput(formattedProblem.visibleTestCases?.[0]?.input || '');
@@ -710,7 +1027,6 @@ function SolveProblemPage() {
             if (isMounted && Array.isArray(data)) {
               const solved = data.some((sp) => sp._id === apiProblem._id);
               setIsSolved(solved);
-              setStreakCount(data.length > 0 ? 1 : 0);
             }
           } catch {
             // guest or unauthenticated
@@ -718,9 +1034,10 @@ function SolveProblemPage() {
         } else {
           setProblem(DEFAULT_PROBLEM);
           const savedDraft = loadSavedDraft(DEFAULT_PROBLEM, routeIdentifier, currentLang);
-          const initial = savedDraft !== null && savedDraft !== undefined
-            ? savedDraft
-            : getStarterCode(DEFAULT_PROBLEM, currentLang);
+          const initial =
+            savedDraft !== null && savedDraft !== undefined && savedDraft.trim().length > 0
+              ? savedDraft
+              : getStarterCode(DEFAULT_PROBLEM, currentLang);
           setCode(initial);
           codeRef.current = initial;
           setCustomInput(DEFAULT_PROBLEM.visibleTestCases?.[0]?.input || '');
@@ -731,9 +1048,10 @@ function SolveProblemPage() {
           const currentLang = selectedLangRef.current || 'javascript';
           setProblem(DEFAULT_PROBLEM);
           const savedDraft = loadSavedDraft(DEFAULT_PROBLEM, routeIdentifier, currentLang);
-          const initial = savedDraft !== null && savedDraft !== undefined
-            ? savedDraft
-            : getStarterCode(DEFAULT_PROBLEM, currentLang);
+          const initial =
+            savedDraft !== null && savedDraft !== undefined && savedDraft.trim().length > 0
+              ? savedDraft
+              : getStarterCode(DEFAULT_PROBLEM, currentLang);
           setCode(initial);
           codeRef.current = initial;
           setCustomInput(DEFAULT_PROBLEM.visibleTestCases?.[0]?.input || '');
@@ -751,6 +1069,13 @@ function SolveProblemPage() {
       isMounted = false;
     };
   }, [routeIdentifier]);
+
+  // Sync streakCount from authenticated user model
+  useEffect(() => {
+    if (user?.streakCount !== undefined) {
+      setStreakCount(user.streakCount);
+    }
+  }, [user?.streakCount]);
 
   // Handle code changes from Monaco editor with debounced auto-save
   const handleCodeChange = (newVal) => {
@@ -780,7 +1105,7 @@ function SolveProblemPage() {
       clearTimeout(saveTimeoutRef.current);
       setIsSavingDraft(false);
     }
-    if (codeRef.current !== undefined && codeRef.current !== null) {
+    if (codeRef.current && typeof codeRef.current === 'string' && codeRef.current.trim().length > 0) {
       saveDraftToStorage(problem, routeIdentifier, selectedLang, codeRef.current);
     }
 
@@ -790,7 +1115,10 @@ function SolveProblemPage() {
 
     // 3. Load saved draft for new language, or fallback to starter code
     const draft = loadSavedDraft(problem, routeIdentifier, langKey);
-    const nextCode = draft !== null && draft !== undefined ? draft : getStarterCode(problem, langKey);
+    const nextCode =
+      draft !== null && draft !== undefined && draft.trim().length > 0
+        ? draft
+        : getStarterCode(problem, langKey);
     setCode(nextCode);
     codeRef.current = nextCode;
 
@@ -1044,7 +1372,17 @@ function SolveProblemPage() {
         setSubmitResult(response.data);
         if (response.data?.accepted || response.data?.status === 'accepted') {
           setIsSolved(true);
-          setStreakCount(1);
+          const newStreak = response.data?.streakCount ?? (streakCount > 0 ? streakCount + 1 : 1);
+          setStreakCount(newStreak);
+          if (user) {
+            dispatch(
+              updateUserLocally({
+                streakCount: newStreak,
+                lastSolvedDate: response.data?.lastSolvedDate || new Date().toISOString(),
+                problemSolved: [...(user.problemSolved || []), targetProblemId],
+              })
+            );
+          }
           triggerToast('Solution Accepted! 🎉', '🏆');
         } else {
           triggerToast('Submission rejected', '❌');
@@ -1131,14 +1469,14 @@ function SolveProblemPage() {
         <div className="flex items-center space-x-2 sm:space-x-3">
           <div
             title={
-              streakCount > 0
-                ? `${streakCount} Day Problem Solving Streak`
+              (user?.streakCount ?? streakCount) > 0
+                ? `${user?.streakCount ?? streakCount} Day Problem Solving Streak`
                 : 'Solve this problem to start your daily streak!'
             }
             className="flex items-center gap-1 sm:gap-1.5 bg-orange-950/40 border border-orange-800/60 text-orange-400 px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-bold"
           >
             <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
-            <span className="font-mono">{streakCount}</span>
+            <span className="font-mono">{user?.streakCount ?? streakCount ?? 0}</span>
           </div>
 
           {isAuthenticated ? (
@@ -1308,23 +1646,9 @@ function SolveProblemPage() {
               <div className="space-y-6">
                 {/* Problem Title & Status Badge */}
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                      {problem.problemNumber ? `${problem.problemNumber}. ` : ''}{problem.title}
-                    </h1>
-                    <button
-                      type="button"
-                      onClick={handleToggleBookmark}
-                      title={isBookmarked ? 'Remove Bookmark' : 'Bookmark Problem'}
-                      className={`p-1.5 rounded-lg border transition cursor-pointer shrink-0 ${
-                        isBookmarked
-                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25'
-                          : 'bg-zinc-800/80 border-zinc-700/80 text-zinc-400 hover:text-amber-400 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Star className={`w-4 h-4 transition ${isBookmarked ? 'fill-amber-400 text-amber-400' : ''}`} />
-                    </button>
-                  </div>
+                  <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                    {problem.problemNumber ? `${problem.problemNumber}. ` : ''}{problem.title}
+                  </h1>
                   {isSolved ? (
                     <span className="shrink-0 px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-xs font-semibold flex items-center gap-1">
                       <Check className="w-3 h-3" />
@@ -1363,17 +1687,6 @@ function SolveProblemPage() {
                     <Tag className="w-3 h-3 text-zinc-400" />
                     <span>Topics</span>
                     <ChevronDown className="w-3 h-3 text-zinc-400" />
-                  </button>
-
-                  {/* Companies Button */}
-                  <button
-                    type="button"
-                    onClick={() => setShowCompanies((prev) => !prev)}
-                    className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-700 transition cursor-pointer"
-                  >
-                    <Building2 className="w-3 h-3 text-zinc-400" />
-                    <span>Companies</span>
-                    <Lock className="w-2.5 h-2.5 text-zinc-500" />
                   </button>
 
                   {/* Hint Accordion Toggle */}
@@ -1415,20 +1728,6 @@ function SolveProblemPage() {
                   </div>
                 )}
 
-                {/* Companies Tags */}
-                {showCompanies && (
-                  <div className="flex flex-wrap gap-1.5 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800 text-xs">
-                    {(problem.companies || ['Amazon', 'Google', 'Microsoft']).map((c) => (
-                      <span
-                        key={c}
-                        className="px-2 py-0.5 bg-zinc-800 rounded-md text-zinc-300 font-semibold border border-zinc-700/60"
-                      >
-                        {c}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
                 {/* Hint Card */}
                 {showHint && (
                   <div className="p-3.5 bg-amber-950/20 border border-amber-800/40 rounded-xl text-xs text-amber-200 leading-relaxed flex items-start gap-2.5 animate-in fade-in duration-150">
@@ -1444,9 +1743,7 @@ function SolveProblemPage() {
                 )}
 
                 {/* Problem Description Body */}
-                <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                  {problem.description}
-                </div>
+                <FormattedDescription content={problem.description} />
 
                 {/* Examples Section */}
                 <div className="space-y-4 pt-2">
@@ -1543,66 +1840,94 @@ function SolveProblemPage() {
                   </h2>
                 </div>
 
-                {/* Check if video editorial exists */}
-                {problem.secureUrl && (
-                  <Editorial
-                    secureUrl={problem.secureUrl}
-                    thumbnailUrl={problem.thumbnailUrl}
-                    duration={problem.duration}
-                  />
+                {/* Written Editorial Content */}
+                {problem?.editorial || problem?.writtenEditorial ? (
+                  <div className="space-y-4 text-xs text-zinc-300 leading-relaxed">
+                    <FormattedDescription description={problem.editorial || problem.writtenEditorial} />
+                  </div>
+                ) : problem?.slug === 'maximum-nesting-depth-of-the-parentheses' || problem?.id === 1614 ? (
+                  <div className="space-y-4 text-xs text-zinc-300 leading-relaxed">
+                    <div className="p-4 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-2">
+                      <h3 className="font-bold text-sm text-white">
+                        Approach 1: Single Pass Simulation
+                      </h3>
+                      <p>
+                        Iterate through each character of the string. Maintain a running counter{' '}
+                        <code className="text-amber-300 bg-zinc-800 px-1 py-0.5 rounded">currentDepth</code>{' '}
+                        that increments when an open parenthesis <code className="text-zinc-200">'('</code> is encountered and
+                        decrements when a closing parenthesis <code className="text-zinc-200">')'</code> is encountered.
+                      </p>
+                      <p>
+                        Keep track of the maximum value of <code className="text-amber-300">currentDepth</code> seen so far.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-center">
+                      <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl">
+                        <span className="block text-zinc-500 font-bold mb-1">Time Complexity</span>
+                        <span className="font-mono text-emerald-400 font-bold text-sm">O(N)</span>
+                      </div>
+                      <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl">
+                        <span className="block text-zinc-500 font-bold mb-1">Space Complexity</span>
+                        <span className="font-mono text-blue-400 font-bold text-sm">O(1)</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 bg-zinc-900/60 rounded-xl border border-zinc-800 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-zinc-200">
+                        Written editorial and approach notes for this problem will be updated soon.
+                      </p>
+                      <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                        Detailed algorithmic walk-throughs, intuition, and time/space complexity analysis will be available soon.
+                      </p>
+                    </div>
+                  </div>
                 )}
-
-                {/* Structured Text Approach */}
-                <div className="space-y-4 text-xs text-zinc-300 leading-relaxed">
-                  <div className="p-4 bg-zinc-900/60 rounded-xl border border-zinc-800 space-y-2">
-                    <h3 className="font-bold text-sm text-white">
-                      Approach 1: Single Pass Simulation
-                    </h3>
-                    <p>
-                      Iterate through each character of the string. Maintain a running counter{' '}
-                      <code className="text-amber-300 bg-zinc-800 px-1 py-0.5 rounded">currentDepth</code>{' '}
-                      that increments when an open parenthesis <code className="text-zinc-200">'('</code> is encountered and
-                      decrements when a closing parenthesis <code className="text-zinc-200">')'</code> is encountered.
-                    </p>
-                    <p>
-                      Keep track of the maximum value of <code className="text-amber-300">currentDepth</code> seen so far.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-center">
-                    <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl">
-                      <span className="block text-zinc-500 font-bold mb-1">Time Complexity</span>
-                      <span className="font-mono text-emerald-400 font-bold text-sm">O(N)</span>
-                    </div>
-                    <div className="p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl">
-                      <span className="block text-zinc-500 font-bold mb-1">Space Complexity</span>
-                      <span className="font-mono text-blue-400 font-bold text-sm">O(1)</span>
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
 
             {/* TAB 3: SOLUTIONS */}
             {activeLeftTab === 'solutions' && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
                     <Users className="w-5 h-5 text-emerald-400" />
-                    <span>Reference Solutions</span>
+                    <span>Solutions</span>
                   </h2>
                 </div>
 
-                {/* If problem has a solution video, show video section */}
-                {problem?.secureUrl && (
-                  <Editorial
-                    secureUrl={problem.secureUrl}
-                    thumbnailUrl={problem.thumbnailUrl}
-                    duration={problem.duration}
-                  />
-                )}
+                {/* Official Solution Video Player (strictly rendered inside Solutions tab) */}
+                {problem?.secureUrl ? (
+                  <div className="space-y-3 pb-5 border-b border-zinc-800">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Video className="w-4 h-4 text-rose-400" />
+                        <span>Official Video Solution</span>
+                      </h3>
+                      {problem.duration ? (
+                        <span className="text-[11px] font-mono text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded border border-zinc-700/60">
+                          Duration: {Math.floor(problem.duration / 60)}:{(Math.floor(problem.duration % 60)).toString().padStart(2, '0')}
+                        </span>
+                      ) : null}
+                    </div>
+                    <Editorial
+                      secureUrl={problem.secureUrl}
+                      thumbnailUrl={problem.thumbnailUrl}
+                      duration={problem.duration}
+                    />
+                  </div>
+                ) : null}
 
-                <div className="space-y-4">
+                {/* Reference Solutions Code Snippets / Community Approaches */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                    Reference Implementations
+                  </h3>
                   {problem?.referenceSolution && problem.referenceSolution.length > 0 ? (
                     problem.referenceSolution.map((sol, idx) => (
                       <div
@@ -1628,9 +1953,12 @@ function SolveProblemPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="p-6 bg-zinc-900/60 rounded-xl border border-zinc-800 text-center">
-                      <p className="text-sm text-zinc-400">
-                        Official solutions are not available yet. Check the Editorial/Video tab.
+                    <div className="p-6 bg-zinc-900/60 rounded-xl border border-zinc-800 text-center space-y-1.5">
+                      <p className="text-sm font-medium text-zinc-300">
+                        Submit your accepted code to view community solutions.
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        Solve and get an Accepted verdict to unlock and share reference implementations.
                       </p>
                     </div>
                   )}
@@ -1779,7 +2107,7 @@ function SolveProblemPage() {
           <div className="flex-1 w-full min-h-[320px] md:min-h-0 bg-[#1e1e1e] overflow-hidden relative">
             <Editor
               height="100%"
-              language={LANG_CONFIG[selectedLang]?.monaco || 'javascript'}
+              language={getMonacoLanguage(selectedLang)}
               value={code}
               onChange={handleCodeChange}
               onMount={(editor) => {

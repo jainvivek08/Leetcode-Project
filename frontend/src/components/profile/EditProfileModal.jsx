@@ -135,28 +135,28 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-7 max-w-xl w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 my-8 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-6 sm:p-7 max-w-xl w-full shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 my-8 max-h-[90vh] flex flex-col text-zinc-100">
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+          className="absolute top-5 right-5 text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center space-x-2 text-blue-600 mb-1">
+        <div className="flex items-center space-x-2 text-amber-500 mb-1">
           <Edit3 className="w-5 h-5" />
-          <h3 className="text-lg font-black text-slate-900">Edit Developer Profile</h3>
+          <h3 className="text-lg font-black text-zinc-100">Edit Developer Profile</h3>
         </div>
-        <p className="text-xs text-slate-500 mb-4">
+        <p className="text-xs text-zinc-400 mb-4">
           Update your public profile and personal information.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs overflow-y-auto pr-1">
           {/* Avatar / Profile Picture Upload Box */}
-          <div className="flex items-center gap-4 p-3.5 bg-slate-50 border border-slate-200/90 rounded-2xl">
-            <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-slate-900 via-blue-950 to-slate-800 text-white flex items-center justify-center font-black text-xl shadow-xs overflow-hidden shrink-0 border-2 border-white ring-1 ring-slate-200">
+          <div className="flex items-center gap-4 p-3.5 bg-zinc-950/60 border border-zinc-800 rounded-2xl">
+            <div className="relative w-16 h-16 rounded-2xl bg-zinc-800 text-amber-400 flex items-center justify-center font-black text-xl shadow-xs overflow-hidden shrink-0 border-2 border-zinc-700 ring-1 ring-zinc-700">
               {formData.avatar ? (
                 <img
                   src={formData.avatar}
@@ -169,14 +169,14 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
             </div>
 
             <div className="flex-1 min-w-0">
-              <label className="font-bold text-slate-800 block text-xs mb-1">
+              <label className="font-bold text-zinc-200 block text-xs mb-1">
                 Profile Avatar
               </label>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-xl text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                 >
                   <Camera className="w-3.5 h-3.5" />
                   Upload Image
@@ -185,7 +185,7 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                   <button
                     type="button"
                     onClick={handleRemovePhoto}
-                    className="px-2.5 py-1.5 text-rose-600 hover:bg-rose-50 font-bold rounded-xl border border-rose-200 text-[11px] flex items-center gap-1 transition cursor-pointer"
+                    className="px-2.5 py-1.5 text-rose-400 hover:bg-rose-500/10 font-bold rounded-xl border border-rose-500/30 text-[11px] flex items-center gap-1 transition cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Remove
@@ -199,7 +199,7 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                   className="hidden"
                 />
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">
+              <p className="text-[10px] text-zinc-500 mt-1">
                 Supports JPG, PNG, WebP or GIF (compressed automatically).
               </p>
             </div>
@@ -207,8 +207,8 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
 
           {/* Or Image Link */}
           <div>
-            <label className="font-semibold text-slate-600 block mb-1 flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
+            <label className="font-semibold text-zinc-300 block mb-1 flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
               Or Avatar URL
             </label>
             <input
@@ -217,15 +217,15 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
               value={formData.avatar}
               onChange={handleChange}
               placeholder="https://example.com/your-photo.jpg (or use Upload button above)"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition text-[11px]"
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition text-[11px]"
             />
           </div>
 
           {/* Personal Info Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
             <div>
-              <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-blue-600" />
+              <label className="font-bold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-amber-500" />
                 Full Name
               </label>
               <input
@@ -235,13 +235,13 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="e.g. Swastik Kori"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-blue-600" />
+              <label className="font-bold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-amber-500" />
                 Location
               </label>
               <input
@@ -250,7 +250,7 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                 value={formData.location}
                 onChange={handleChange}
                 placeholder="e.g. Jabalpur, MP, India"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
             </div>
           </div>
@@ -258,8 +258,8 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
           {/* Academic Info Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
+              <label className="font-bold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5 text-amber-500" />
                 College / Institution
               </label>
               <input
@@ -268,13 +268,13 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                 value={formData.college}
                 onChange={handleChange}
                 placeholder="e.g. Jabalpur Engineering College"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
+              <label className="font-bold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5 text-amber-500" />
                 Graduation / Degree
               </label>
               <input
@@ -283,31 +283,31 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                 value={formData.graduationDetails}
                 onChange={handleChange}
                 placeholder="e.g. Class of 2028 • B.Tech CSE"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
             </div>
           </div>
 
           {/* Bio */}
           <div>
-            <label className="font-bold text-slate-700 block mb-1">About / Bio</label>
+            <label className="font-bold text-zinc-300 block mb-1">About / Bio</label>
             <textarea
               name="bio"
               rows={2}
               value={formData.bio}
               onChange={handleChange}
               placeholder="Tell others about your problem solving focus and interests..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white leading-relaxed transition"
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 leading-relaxed transition"
             />
           </div>
 
           {/* Portfolio & Socials */}
-          <div className="pt-2 border-t border-slate-100 space-y-3">
-            <h4 className="font-bold text-slate-800 text-xs">Web &amp; Social Links</h4>
+          <div className="pt-2 border-t border-zinc-800 space-y-3">
+            <h4 className="font-bold text-zinc-200 text-xs">Web &amp; Social Links</h4>
 
             <div>
-              <label className="font-semibold text-slate-600 block mb-1 flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-slate-400" />
+              <label className="font-semibold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-zinc-400" />
                 Portfolio / Website
               </label>
               <input
@@ -316,14 +316,14 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                 value={formData.website}
                 onChange={handleChange}
                 placeholder="swastik.dev"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div>
-                <label className="font-semibold text-slate-600 block mb-1 flex items-center gap-1.5">
-                  <Github className="w-3.5 h-3.5 text-slate-400" />
+                <label className="font-semibold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                  <Github className="w-3.5 h-3.5 text-zinc-400" />
                   GitHub URL
                 </label>
                 <input
@@ -332,13 +332,13 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                   value={formData.github}
                   onChange={handleChange}
                   placeholder="https://github.com/..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition text-[11px]"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition text-[11px]"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-600 block mb-1 flex items-center gap-1.5">
-                  <Linkedin className="w-3.5 h-3.5 text-blue-500" />
+                <label className="font-semibold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                  <Linkedin className="w-3.5 h-3.5 text-blue-400" />
                   LinkedIn URL
                 </label>
                 <input
@@ -347,13 +347,13 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                   value={formData.linkedin}
                   onChange={handleChange}
                   placeholder="https://linkedin.com/in/..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition text-[11px]"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition text-[11px]"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-600 block mb-1 flex items-center gap-1.5">
-                  <Twitter className="w-3.5 h-3.5 text-slate-700" />
+                <label className="font-semibold text-zinc-300 block mb-1 flex items-center gap-1.5">
+                  <Twitter className="w-3.5 h-3.5 text-zinc-400" />
                   X / Twitter URL
                 </label>
                 <input
@@ -362,24 +362,24 @@ function EditProfileModal({ isOpen, onClose, initialData, onSave }) {
                   value={formData.twitter}
                   onChange={handleChange}
                   placeholder="https://x.com/..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition text-[11px]"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition text-[11px]"
                 />
               </div>
             </div>
           </div>
 
           {/* Modal Footer */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold transition cursor-pointer"
+              className="px-4 py-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-xl font-bold transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-xs transition cursor-pointer"
+              className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 rounded-xl font-bold shadow-xs transition cursor-pointer"
             >
               Save
             </button>

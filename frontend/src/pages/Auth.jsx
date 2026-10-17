@@ -468,14 +468,14 @@ function Auth({ defaultMode }) {
               <button
                 type="button"
                 className="flex-1 py-1 px-2 border border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-white text-slate-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
-                onClick={() => handleQuickDemo('admin@leetcode.com', 'Admin@1234')}
+                onClick={() => handleQuickDemo('admin@codequest.com', 'AdminPassword123!')}
               >
                 👑 Admin Demo
               </button>
               <button
                 type="button"
                 className="flex-1 py-1 px-2 border border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-white text-slate-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
-                onClick={() => handleQuickDemo('swastik@leetcode.com', 'User@1234')}
+                onClick={() => handleQuickDemo('user@codequest.com', 'UserPassword123!')}
               >
                 👤 User Demo
               </button>

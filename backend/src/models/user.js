@@ -39,6 +39,14 @@ const userSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'problem'
     }],
+    streakCount: {
+        type: Number,
+        default: 0
+    },
+    lastSolvedDate: {
+        type: Date,
+        default: null
+    },
     password:{
         type:String,
         required: true

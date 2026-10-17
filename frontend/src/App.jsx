@@ -15,6 +15,7 @@ const DeveloperProfile = lazy(() => import("./pages/DeveloperProfile"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const RoadmapsPage = lazy(() => import("./pages/RoadmapsPage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const PlaygroundPage = lazy(() => import("./pages/PlaygroundPage"));
 
 // Admin Routes (Lazy loaded)
 const Admin = lazy(() => import("./pages/Admin"));
@@ -25,9 +26,9 @@ const AdminVideo = lazy(() => import("./components/AdminVideo"));
 const AdminUpload = lazy(() => import("./components/AdminUpload"));
 
 const LoadingSpinner = () => (
-  <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-    <span className="loading loading-spinner loading-lg text-primary"></span>
-    <span className="text-xs text-base-content/60 font-medium tracking-wide">Loading...</span>
+  <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-100">
+    <span className="loading loading-spinner loading-lg text-amber-500"></span>
+    <span className="text-xs text-zinc-400 font-medium tracking-wide">Loading...</span>
   </div>
 );
 
@@ -71,65 +72,69 @@ function App(){
       document.title = 'Log In | CodeQuest';
     } else if (path === '/signup') {
       document.title = 'Sign Up | CodeQuest';
+    } else if (path === '/playground') {
+      document.title = 'Playground | CodeQuest';
     } else if (
       path.startsWith('/problem/') ||
       path.startsWith('/problems/') ||
-      path.startsWith('/solve/') ||
-      path === '/compiler'
+      path.startsWith('/solve/')
     ) {
       document.title = 'Solve Problem | CodeQuest';
     }
   }, [location.pathname]);
   
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">
-      <span className="loading loading-spinner loading-lg"></span>
+    return <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
+      <span className="loading loading-spinner loading-lg text-amber-500"></span>
     </div>;
   }
 
   return(
-    <ErrorBoundary>
-      <Suspense fallback={<LoadingSpinner />}>
-        <Routes>
-          {/* 1. Landing Page as default root */}
-          <Route path="/" element={<LandingPage />} />
+    <div className="dark min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            {/* 1. Landing Page as default root */}
+            <Route path="/" element={<LandingPage />} />
 
-          {/* 2. Coding Workspace / Problems Arena */}
-          <Route path="/problems" element={<ProblemsPage />} />
-          <Route path="/practice" element={<ProblemsPage />} />
-          <Route path="/explore" element={<RoadmapsPage />} />
-          <Route path="/roadmaps" element={<RoadmapsPage />} />
-          <Route path="/compiler" element={<SolveProblemPage />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
+            {/* 2. Coding Workspace / Problems Arena */}
+            <Route path="/problems" element={<ProblemsPage />} />
+            <Route path="/practice" element={<ProblemsPage />} />
+            <Route path="/explore" element={<RoadmapsPage />} />
+            <Route path="/roadmaps" element={<RoadmapsPage />} />
+            <Route path="/playground" element={<PlaygroundPage />} />
+            <Route path="/compiler" element={<Navigate to="/playground" replace />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
 
-          {/* 3. Modern Auth Routes (Sign In & Sign Up in-place) */}
-          <Route path="/login" element={isAuthenticated ? <Navigate to={location.state?.from || "/problems"} replace /> : <Login />} />
-          <Route path="/signup" element={isAuthenticated ? <Navigate to={location.state?.from || "/problems"} replace /> : <Signup />} />
+            {/* 3. Modern Auth Routes (Sign In & Sign Up in-place) */}
+            <Route path="/login" element={isAuthenticated ? <Navigate to={location.state?.from || "/problems"} replace /> : <Login />} />
+            <Route path="/signup" element={isAuthenticated ? <Navigate to={location.state?.from || "/problems"} replace /> : <Signup />} />
 
-          {/* 4. Developer Profile & Settings Pages */}
-          <Route path="/profile" element={<DeveloperProfile />} />
-          <Route path="/settings" element={<SettingsPage />} />
+            {/* 4. Developer Profile & Settings Pages */}
+            <Route path="/profile" element={<DeveloperProfile />} />
+            <Route path="/settings" element={<SettingsPage />} />
 
-          {/* 5. Admin Routes (Strictly Protected) */}
-          <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-          <Route path="/admin/create" element={<AdminRoute><ProblemForm mode="create" /></AdminRoute>} />
-          <Route path="/admin/update" element={<AdminRoute><AdminUpdate /></AdminRoute>} />
-          <Route path="/admin/update/:id" element={<AdminRoute><ProblemForm mode="edit" /></AdminRoute>} />
-          <Route path="/admin/delete" element={<AdminRoute><AdminDelete /></AdminRoute>} />
-          <Route path="/admin/video" element={<AdminRoute><AdminVideo /></AdminRoute>} />
-          <Route path="/admin/upload/:problemId" element={<AdminRoute><AdminUpload /></AdminRoute>} />
+            {/* 5. Admin Routes (Strictly Protected) */}
+            <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+            <Route path="/admin/create" element={<AdminRoute><ProblemForm mode="create" /></AdminRoute>} />
+            <Route path="/admin/update" element={<AdminRoute><AdminUpdate /></AdminRoute>} />
+            <Route path="/admin/update/:id" element={<AdminRoute><ProblemForm mode="edit" /></AdminRoute>} />
+            <Route path="/admin/delete" element={<AdminRoute><AdminDelete /></AdminRoute>} />
+            <Route path="/admin/video" element={<AdminRoute><AdminVideo /></AdminRoute>} />
+            <Route path="/admin/upload/:problemId" element={<AdminRoute><AdminUpload /></AdminRoute>} />
 
-          {/* 6. Problem Solve Arena (Supports both canonical /problems/:slug and backward-compatible /problem/:id) */}
-          <Route path="/problems/:slug" element={<SolveProblemPage />} />
-          <Route path="/problem/:id" element={<SolveProblemPage />} />
-          <Route path="/problem/:problemId" element={<SolveProblemPage />} />
-          <Route path="/solve/:problemId" element={<SolveProblemPage />} />
+            {/* 6. Problem Solve Arena (Supports both canonical /problems/:slug and backward-compatible /problem/:id) */}
+            <Route path="/problems/:slug" element={<SolveProblemPage />} />
+            <Route path="/problem/:id" element={<SolveProblemPage />} />
+            <Route path="/problem/:problemId" element={<SolveProblemPage />} />
+            <Route path="/solve/:problemId" element={<SolveProblemPage />} />
 
-          {/* 7. Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </ErrorBoundary>
+            {/* 7. Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    </div>
   );
 }
 

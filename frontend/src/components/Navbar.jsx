@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { useSelector, useDispatch } from 'react-redux';
 import {
@@ -9,15 +9,10 @@ import {
   Layers,
   Compass,
   Terminal,
-  ShieldCheck,
-  PlusCircle,
-  Sliders,
-  ChevronDown,
   Trophy,
 } from 'lucide-react';
 import { ProfileDropdown } from './profile/ProfileDropdown';
 import { logoutUser } from '../authSlice';
-import axiosClient from '../utils/axiosClient';
 
 /**
  * Navbar Component
@@ -33,49 +28,18 @@ function Navbar() {
   const { isAuthenticated, user } = useSelector((state) => state.auth || {});
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [streakCount, setStreakCount] = useState(0);
-  const adminDropdownRef = useRef(null);
 
-  // Click outside to close admin dropdown
+  // Sync streak count with authenticated user model
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
-        setAdminDropdownOpen(false);
+    if (isAuthenticated && user) {
+      if (user.streakCount !== undefined) {
+        setStreakCount(user.streakCount);
       }
-    };
-    if (adminDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      setStreakCount(0);
     }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [adminDropdownOpen]);
-
-  // Dynamically compute streak count based on user solved problems
-  useEffect(() => {
-    let isMounted = true;
-    const fetchStreak = async () => {
-      if (isAuthenticated && user) {
-        try {
-          const { data } = await axiosClient.get('/problem/problemSolvedByUser');
-          if (isMounted && Array.isArray(data)) {
-            setStreakCount(data.length > 0 ? 1 : 0);
-          }
-        } catch {
-          const solvedLen = user.problemSolved?.length || 0;
-          if (isMounted) setStreakCount(solvedLen > 0 ? 1 : 0);
-        }
-      } else {
-        if (isMounted) setStreakCount(0);
-      }
-    };
-
-    fetchStreak();
-    return () => {
-      isMounted = false;
-    };
   }, [isAuthenticated, user]);
 
   const handleLogout = async () => {
@@ -97,7 +61,7 @@ function Navbar() {
   const currentPath = location.pathname;
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/90 dark:border-slate-800 shadow-2xs select-none">
+    <header className="sticky top-0 z-50 bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 text-zinc-100 shadow-2xs select-none">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-15 flex items-center justify-between gap-4">
         {/* ============================================================ */}
         {/* LEFT: BRAND LOGO + MAIN NAV LINKS                           */}
@@ -105,11 +69,11 @@ function Navbar() {
         <div className="flex items-center space-x-8">
           {/* Brand Logo */}
           <Link to="/" className="flex items-center space-x-2.5 group shrink-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#f97316] to-[#ea580c] text-white flex items-center justify-center font-extrabold text-xs shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-zinc-950 flex items-center justify-center font-extrabold text-xs shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
               &lt;/&gt;
             </div>
-            <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">
-              Code<span className="text-[#2563eb] dark:text-blue-400">Quest</span>
+            <span className="font-extrabold text-lg tracking-tight text-zinc-100">
+              Code<span className="text-amber-500">Quest</span>
             </span>
           </Link>
 
@@ -120,8 +84,8 @@ function Navbar() {
               to="/problems"
               className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
                 currentPath === '/problems' || currentPath.startsWith('/problems/') || currentPath.startsWith('/problem/')
-                  ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
+                  ? 'text-amber-400 font-extrabold border-b-2 border-amber-500'
+                  : 'text-zinc-400 hover:text-zinc-100 font-semibold'
               }`}
             >
               <span>Problems</span>
@@ -132,8 +96,8 @@ function Navbar() {
               to="/explore"
               className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
                 currentPath === '/explore' || currentPath === '/roadmaps'
-                  ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
+                  ? 'text-amber-400 font-extrabold border-b-2 border-amber-500'
+                  : 'text-zinc-400 hover:text-zinc-100 font-semibold'
               }`}
             >
               <span>Explore</span>
@@ -141,11 +105,11 @@ function Navbar() {
 
             {/* 3. Playground / Online Compiler */}
             <Link
-              to="/compiler"
+              to="/playground"
               className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
-                currentPath === '/compiler' || currentPath.startsWith('/solve/')
-                  ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
+                currentPath === '/playground'
+                  ? 'text-amber-400 font-extrabold border-b-2 border-amber-500'
+                  : 'text-zinc-400 hover:text-zinc-100 font-semibold'
               }`}
             >
               <span>Playground</span>
@@ -156,81 +120,13 @@ function Navbar() {
               to="/leaderboard"
               className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
                 currentPath === '/leaderboard'
-                  ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
+                  ? 'text-amber-400 font-extrabold border-b-2 border-amber-500'
+                  : 'text-zinc-400 hover:text-zinc-100 font-semibold'
               }`}
             >
               <Trophy className="w-4 h-4 text-amber-500" />
               <span>Leaderboard</span>
             </Link>
-
-            {/* 4. Admin Menu (Visible only to admin users) */}
-            {user?.role === 'admin' && (
-              <div className="relative" ref={adminDropdownRef}>
-                <button
-                  type="button"
-                  id="admin-nav-button"
-                  onClick={() => setAdminDropdownOpen((prev) => !prev)}
-                  aria-expanded={adminDropdownOpen}
-                  aria-haspopup="menu"
-                  className={`flex items-center gap-1.5 py-4.5 transition cursor-pointer ${
-                    currentPath.startsWith('/admin')
-                      ? 'text-[#2563eb] dark:text-blue-400 font-extrabold border-b-2 border-[#2563eb] dark:border-blue-400'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
-                  }`}
-                >
-                  <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                  <span>Admin</span>
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                    Pro
-                  </span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
-                      adminDropdownOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
-
-                {adminDropdownOpen && (
-                  <div
-                    role="menu"
-                    aria-orientation="vertical"
-                    aria-labelledby="admin-nav-button"
-                    className="absolute left-0 mt-1 w-52 bg-white/98 dark:bg-slate-900/98 backdrop-blur-md rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/60 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none"
-                  >
-                    <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Problem Controls
-                    </div>
-                    <Link
-                      to="/admin/create"
-                      role="menuitem"
-                      onClick={() => setAdminDropdownOpen(false)}
-                      className={`flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl transition ${
-                        currentPath === '/admin/create'
-                          ? 'bg-blue-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-bold'
-                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400'
-                      }`}
-                    >
-                      <PlusCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                      <span>Create Problem</span>
-                    </Link>
-                    <Link
-                      to="/admin/update"
-                      role="menuitem"
-                      onClick={() => setAdminDropdownOpen(false)}
-                      className={`flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl transition ${
-                        currentPath === '/admin/update' || currentPath.startsWith('/admin/update/')
-                          ? 'bg-blue-50 dark:bg-slate-800 text-blue-600 dark:text-blue-400 font-bold'
-                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400'
-                      }`}
-                    >
-                      <Sliders className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>Manage Problems</span>
-                    </Link>
-                  </div>
-                )}
-              </div>
-            )}
           </nav>
         </div>
 
@@ -243,15 +139,15 @@ function Navbar() {
             <div className="relative hidden md:block">
               <form onSubmit={handleSearchSubmit}>
                 <div className="relative flex items-center">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+                  <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 pointer-events-none" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search problems..."
-                    className="pl-9 pr-12 py-1.5 bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 focus:bg-white dark:focus:bg-slate-900 border border-slate-200/90 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-44 lg:w-56 transition shadow-2xs"
+                    className="pl-9 pr-12 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 w-44 lg:w-56 transition shadow-2xs"
                   />
-                  <span className="absolute right-2.5 text-[10px] font-mono text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1 py-0.5 rounded pointer-events-none">
+                  <span className="absolute right-2.5 text-[10px] font-mono text-zinc-400 bg-zinc-800 border border-zinc-700 px-1 py-0.5 rounded pointer-events-none">
                     /
                   </span>
                 </div>
@@ -265,14 +161,14 @@ function Navbar() {
               {/* Daily Streak Flame Counter */}
               <div
                 title={
-                  (user.streak || streakCount) > 0
-                    ? `${user.streak || streakCount} Day Problem Solving Streak`
+                  (user?.streakCount ?? streakCount) > 0
+                    ? `${user?.streakCount ?? streakCount} Day Problem Solving Streak`
                     : 'Solve a problem today to start your streak!'
                 }
-                className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-950/40 border border-orange-200/80 dark:border-orange-800/60 text-orange-600 dark:text-orange-400 px-2.5 py-1 rounded-full text-xs font-bold shadow-2xs select-none"
+                className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2.5 py-1 rounded-full text-xs font-bold shadow-2xs select-none"
               >
-                <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
-                <span className="font-mono">{user.streak || streakCount || 0}</span>
+                <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span className="font-mono">{user?.streakCount ?? streakCount ?? 0}</span>
               </div>
 
               {/* User Avatar Circle with ProfileDropdown */}
@@ -289,14 +185,14 @@ function Navbar() {
               <Link
                 to="/login"
                 state={{ from: location.pathname }}
-                className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-semibold text-sm px-2.5 py-1.5 transition"
+                className="text-zinc-400 hover:text-zinc-100 font-semibold text-sm px-2.5 py-1.5 transition"
               >
                 Sign In
               </Link>
               <Link
                 to="/signup"
                 state={{ from: location.pathname }}
-                className="bg-[#2563eb] text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 shadow-sm transition active:scale-95 cursor-pointer"
+                className="bg-amber-500 hover:bg-amber-600 text-zinc-950 px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition active:scale-95 cursor-pointer"
               >
                 Register
               </Link>
@@ -307,7 +203,7 @@ function Navbar() {
           <button
             type="button"
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden transition cursor-pointer"
+            className="p-1.5 text-zinc-400 hover:text-zinc-100 rounded-lg hover:bg-zinc-800 md:hidden transition cursor-pointer"
             aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -319,17 +215,17 @@ function Navbar() {
       {/* MOBILE EXPANDED MENU DRAWER                                  */}
       {/* ============================================================ */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white/98 dark:bg-slate-900/98 px-4 py-3 space-y-2 shadow-lg animate-in slide-in-from-top-2 duration-150">
+        <div className="md:hidden border-t border-zinc-800 bg-zinc-900/98 px-4 py-3 space-y-2 shadow-lg animate-in slide-in-from-top-2 duration-150 text-zinc-100">
           {/* Mobile Search */}
           <form onSubmit={handleSearchSubmit} className="pb-2">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search problems..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                className="w-full pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
               />
             </div>
           </form>
@@ -339,8 +235,8 @@ function Navbar() {
             onClick={() => setMobileMenuOpen(false)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
               currentPath === '/problems'
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'bg-amber-500/10 text-amber-400'
+                : 'text-zinc-300 hover:bg-zinc-800'
             }`}
           >
             <Layers className="w-4 h-4" />
@@ -352,8 +248,8 @@ function Navbar() {
             onClick={() => setMobileMenuOpen(false)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
               currentPath === '/explore' || currentPath === '/roadmaps'
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'bg-amber-500/10 text-amber-400'
+                : 'text-zinc-300 hover:bg-zinc-800'
             }`}
           >
             <Compass className="w-4 h-4" />
@@ -361,12 +257,12 @@ function Navbar() {
           </Link>
 
           <Link
-            to="/compiler"
+            to="/playground"
             onClick={() => setMobileMenuOpen(false)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
-              currentPath === '/compiler'
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+              currentPath === '/playground'
+                ? 'bg-amber-500/10 text-amber-400'
+                : 'text-zinc-300 hover:bg-zinc-800'
             }`}
           >
             <Terminal className="w-4 h-4" />
@@ -379,55 +275,21 @@ function Navbar() {
             onClick={() => setMobileMenuOpen(false)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
               currentPath === '/leaderboard'
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'bg-amber-500/10 text-amber-400'
+                : 'text-zinc-300 hover:bg-zinc-800'
             }`}
           >
             <Trophy className="w-4 h-4 text-amber-500" />
             <span>Leaderboard</span>
           </Link>
 
-          {/* Admin Mobile Controls (Visible only to admin users) */}
-          {user?.role === 'admin' && (
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
-              <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Admin Controls</span>
-              </div>
-              <Link
-                to="/admin/create"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
-                  currentPath === '/admin/create'
-                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <PlusCircle className="w-4 h-4 text-blue-500" />
-                <span>Create Problem</span>
-              </Link>
-              <Link
-                to="/admin/update"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition ${
-                  currentPath === '/admin/update' || currentPath.startsWith('/admin/update/')
-                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Sliders className="w-4 h-4 text-emerald-500" />
-                <span>Manage Problems</span>
-              </Link>
-            </div>
-          )}
-
           {!user && (
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">
+            <div className="pt-2 border-t border-zinc-800 flex items-center gap-2">
               <Link
                 to="/login"
                 state={{ from: currentPath }}
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex-1 text-center py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                className="flex-1 text-center py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-800 rounded-lg transition"
               >
                 Sign In
               </Link>
@@ -435,7 +297,7 @@ function Navbar() {
                 to="/signup"
                 state={{ from: currentPath }}
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex-1 text-center py-2 text-xs font-bold bg-[#2563eb] text-white rounded-lg shadow-sm hover:bg-blue-700 transition"
+                className="flex-1 text-center py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-zinc-950 rounded-lg shadow-sm transition"
               >
                 Register
               </Link>

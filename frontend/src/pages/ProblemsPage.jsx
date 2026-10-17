@@ -16,9 +16,6 @@ import {
   Check,
   Code2,
   Sparkles,
-  ShieldCheck,
-  PlusCircle,
-  Sliders,
   Star,
 } from 'lucide-react';
 import axiosClient from '../utils/axiosClient';
@@ -305,25 +302,11 @@ function ProblemsPage() {
 
   // Dropdown open states
   const [openDropdown, setOpenDropdown] = useState(null);
-  const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
-  const adminDropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) {
-        setAdminDropdownOpen(false);
-      }
-    };
-    if (adminDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [adminDropdownOpen]);
 
   // Live problems & Solved state from MongoDB API
-  const [liveProblems, setLiveProblems] = useState(BASE_PROBLEMS_DATA);
+  const [liveProblems, setLiveProblems] = useState(() =>
+    Array.from(new Map(BASE_PROBLEMS_DATA.map((p) => [p.problemNumber || p._id, p])).values())
+  );
   const [availableTags, setAvailableTags] = useState([]);
   const [solvedIds, setSolvedIds] = useState([]);
   const [bookmarkedIds, setBookmarkedIds] = useState(new Set());
@@ -331,7 +314,9 @@ function ProblemsPage() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalProblems, setTotalProblems] = useState(BASE_PROBLEMS_DATA.length);
+  const [totalProblems, setTotalProblems] = useState(() =>
+    Array.from(new Map(BASE_PROBLEMS_DATA.map((p) => [p.problemNumber || p._id, p])).values()).length
+  );
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [dailyChallenge, setDailyChallenge] = useState(null);
   const [dailyDate, setDailyDate] = useState('');
@@ -470,6 +455,10 @@ function ProblemsPage() {
               topicName = foundMeta.topic;
             }
 
+            const rawSecondary = foundMeta?.secondaryTopic;
+            const secondaryTopic =
+              rawSecondary && rawSecondary !== topicName ? rawSecondary : undefined;
+
             return {
               _id: apiP._id,
               title: apiP.title,
@@ -478,7 +467,7 @@ function ProblemsPage() {
               problemNumber: apiP.problemNumber,
               slug: apiP.slug,
               topic: topicName,
-              secondaryTopic: foundMeta?.secondaryTopic,
+              secondaryTopic,
               companies: foundMeta?.companies || ['Amazon', 'Microsoft'],
               submissions: foundMeta?.submissions || '120.5k',
               submissionsVal: foundMeta?.submissionsVal || 120500,
@@ -487,8 +476,15 @@ function ProblemsPage() {
             };
           });
 
-          setLiveProblems(merged);
-          setTotalProblems(data?.pagination?.totalProblems ?? data?.total ?? merged.length);
+          // Client-side deduplication fallback keyed by problemNumber or _id
+          const uniqueProblems = Array.from(
+            new Map(merged.map((p) => [p.problemNumber || p._id, p])).values()
+          );
+
+          setLiveProblems(uniqueProblems);
+          setTotalProblems(
+            data?.pagination?.totalProblems ?? data?.total ?? uniqueProblems.length
+          );
           setTotalPages(data?.pagination?.totalPages ?? data?.totalPages ?? 1);
         }
       } catch (err) {
@@ -664,7 +660,7 @@ function ProblemsPage() {
     const q = searchQuery.toLowerCase().trim();
 
     // 1. Filter problems
-    const filteredProblems = liveProblems.filter((p) => {
+    const rawFilteredProblems = liveProblems.filter((p) => {
       // Bookmarked filter
       if (onlyBookmarked && !bookmarkedIds.has(String(p._id))) {
         return false;
@@ -710,6 +706,11 @@ function ProblemsPage() {
       }
       return true;
     });
+
+    // Client-side deduplication fallback for filtered problems
+    const filteredProblems = Array.from(
+      new Map(rawFilteredProblems.map((p) => [p.problemNumber || p._id, p])).values()
+    );
 
     // 2. Sort problems
     if (selectedSort === 'acc-high') {
@@ -762,8 +763,12 @@ function ProblemsPage() {
       }
       topicMap[tName].difficulties[diffCap].push(prob);
 
-      // If problem has secondary topic and search/topic filter matches, include it too
-      if (prob.secondaryTopic && topicMap[prob.secondaryTopic]) {
+      // If problem has secondary topic distinct from primary topic and matches, include it too
+      if (
+        prob.secondaryTopic &&
+        prob.secondaryTopic !== tName &&
+        topicMap[prob.secondaryTopic]
+      ) {
         topicMap[prob.secondaryTopic].problems.push(prob);
         topicMap[prob.secondaryTopic].difficulties[diffCap].push(prob);
       }
@@ -772,15 +777,25 @@ function ProblemsPage() {
     // Format into array, keeping only topics with problems if search or filter active
     const result = Object.values(topicMap)
       .map((t) => {
-        const diffList = ['Easy', 'Medium', 'Hard'].map((diffName) => ({
-          name: diffName,
-          count: t.difficulties[diffName]?.length || 0,
-          problems: t.difficulties[diffName] || [],
-        }));
+        const diffList = ['Easy', 'Medium', 'Hard'].map((diffName) => {
+          const rawDiffProbs = t.difficulties[diffName] || [];
+          const uniqueDiffProblems = Array.from(
+            new Map(rawDiffProbs.map((p) => [p.problemNumber || p._id, p])).values()
+          );
+          return {
+            name: diffName,
+            count: uniqueDiffProblems.length,
+            problems: uniqueDiffProblems,
+          };
+        });
+
+        const uniqueTopicProblems = Array.from(
+          new Map(t.problems.map((p) => [p.problemNumber || p._id, p])).values()
+        );
 
         return {
           name: t.name,
-          totalCount: t.problems.length,
+          totalCount: uniqueTopicProblems.length,
           difficulties: diffList,
         };
       })
@@ -816,95 +831,39 @@ function ProblemsPage() {
   }, [liveProblems]);
 
   return (
-    <div className="hero-grid min-h-screen flex flex-col antialiased selection:bg-blue-100 selection:text-blue-900 text-slate-800 dark:text-slate-100">
+    <div className="min-h-screen flex flex-col antialiased selection:bg-amber-500/20 selection:text-amber-300 bg-zinc-950 text-zinc-100">
       {/* 1. TOP NAVBAR */}
-      <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/90 dark:border-slate-800 shadow-2xs">
+      <header className="sticky top-0 z-40 bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800 shadow-2xs">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-4">
           <div className="flex items-center space-x-7">
             <Link to="/" className="flex items-center space-x-2.5 group">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#f97316] to-[#ea580c] text-white flex items-center justify-center font-extrabold text-xs shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
                 &lt;/&gt;
               </div>
-              <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">
-                Code<span className="text-blue-600 dark:text-blue-400">Quest</span>
+              <span className="font-extrabold text-lg tracking-tight text-zinc-100">
+                Code<span className="text-amber-500">Quest</span>
               </span>
             </Link>
 
-            <nav className="hidden md:flex items-center space-x-6 text-[13px] font-semibold text-slate-600 dark:text-slate-400">
+            <nav className="hidden md:flex items-center space-x-6 text-[13px] font-semibold text-zinc-400">
               <Link
                 to="/problems"
-                className="text-blue-600 dark:text-blue-400 font-extrabold flex items-center gap-1.5 py-4 border-b-2 border-blue-600 dark:border-blue-400"
+                className="text-amber-400 font-extrabold flex items-center gap-1.5 py-4 border-b-2 border-amber-500"
               >
                 <span>Problems</span>
               </Link>
               <Link
                 to="/explore"
-                className="hover:text-slate-900 dark:hover:text-white transition"
+                className="hover:text-zinc-100 transition"
               >
                 Explore
               </Link>
               <Link
-                to="/compiler"
-                className="hover:text-slate-900 dark:hover:text-white transition"
+                to="/playground"
+                className="hover:text-zinc-100 transition"
               >
                 Playground
               </Link>
-
-              {/* Admin Menu (Visible only to admin users) */}
-              {user?.role === 'admin' && (
-                <div className="relative" ref={adminDropdownRef}>
-                  <button
-                    type="button"
-                    id="problems-admin-nav-button"
-                    onClick={() => setAdminDropdownOpen((prev) => !prev)}
-                    aria-expanded={adminDropdownOpen}
-                    aria-haspopup="menu"
-                    className="flex items-center gap-1.5 py-4 transition cursor-pointer text-[13px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    <span>Admin</span>
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                      Pro
-                    </span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
-                        adminDropdownOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-
-                  {adminDropdownOpen && (
-                    <div
-                      role="menu"
-                      aria-orientation="vertical"
-                      aria-labelledby="problems-admin-nav-button"
-                      className="absolute left-0 mt-1 w-52 bg-white/98 dark:bg-slate-900/98 backdrop-blur-md rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/60 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 select-none"
-                    >
-                      <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Problem Controls
-                      </div>
-                      <Link
-                        to="/admin/create"
-                        role="menuitem"
-                        onClick={() => setAdminDropdownOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 transition"
-                      >
-                        <PlusCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                        <span>Create Problem</span>
-                      </Link>
-                      <Link
-                        to="/admin/update"
-                        role="menuitem"
-                        onClick={() => setAdminDropdownOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 transition"
-                      >
-                        <Sliders className="w-4 h-4 text-emerald-500 shrink-0" />
-                        <span>Manage Problems</span>
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
             </nav>
           </div>
 
@@ -914,11 +873,11 @@ function ProblemsPage() {
                 {/* Daily Streak Flame */}
                 <div
                   title="Daily Problem Solving Streak"
-                  className="flex items-center gap-1.5 bg-orange-50 dark:bg-orange-950/40 border border-orange-200/80 dark:border-orange-800/60 text-orange-700 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-bold shadow-2xs select-none"
+                  className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-1 rounded-full text-xs font-bold shadow-2xs select-none"
                 >
-                  <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
+                  <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                   <span className="font-mono">
-                    {user?.streak || (solvedIds.length > 0 ? 1 : 0)}
+                    {user?.streakCount ?? user?.streak ?? (solvedIds.length > 0 ? 1 : 0)}
                   </span>
                 </div>
 
@@ -936,14 +895,14 @@ function ProblemsPage() {
                 <Link
                   to="/login"
                   state={{ from: '/problems' }}
-                  className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-semibold text-sm px-2.5 py-1.5 transition"
+                  className="text-zinc-400 hover:text-zinc-100 font-semibold text-sm px-2.5 py-1.5 transition"
                 >
                   Sign In
                 </Link>
                 <Link
                   to="/signup"
                   state={{ from: '/problems' }}
-                  className="bg-[#2563eb] text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 shadow-sm transition active:scale-95 cursor-pointer"
+                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition active:scale-95 cursor-pointer"
                 >
                   Register
                 </Link>
@@ -957,23 +916,23 @@ function ProblemsPage() {
       <main className="max-w-[1360px] mx-auto px-4 sm:px-6 py-6 w-full flex-1">
         {/* Daily Challenge Banner */}
         {dailyChallenge && (
-          <div className="mb-6 relative overflow-hidden bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-blue-500/10 dark:from-orange-950/30 dark:via-slate-900 dark:to-blue-950/30 rounded-2xl border border-orange-500/20 dark:border-orange-500/30 p-5 sm:p-6 shadow-xs">
+          <div className="mb-6 relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900/80 rounded-2xl border border-amber-500/20 p-5 sm:p-6 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
               <div className="space-y-2.5">
                 <div className="flex items-center gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-xs">
-                    <Flame className="w-3.5 h-3.5 fill-white" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500 text-zinc-950 shadow-xs">
+                    <Flame className="w-3.5 h-3.5 fill-zinc-950 text-zinc-950" />
                     Daily Challenge
                   </span>
                   {dailyDate && (
-                    <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
+                    <span className="text-xs font-mono font-medium text-zinc-400">
                       {dailyDate}
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-baseline gap-3">
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                  <h2 className="text-xl sm:text-2xl font-black text-zinc-100 tracking-tight">
                     {dailyChallenge.problemNumber ? `#${dailyChallenge.problemNumber}. ` : ''}
                     {dailyChallenge.title}
                   </h2>
@@ -982,10 +941,10 @@ function ProblemsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border capitalize ${
                     (dailyChallenge.difficulty || '').toLowerCase() === 'easy'
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                       : (dailyChallenge.difficulty || '').toLowerCase() === 'medium'
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                   }`}>
                     {dailyChallenge.difficulty}
                   </span>
@@ -993,7 +952,7 @@ function ProblemsPage() {
                   {normalizeTags(dailyChallenge.tags).map((t) => (
                     <span
                       key={t}
-                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-800/80 text-zinc-300 border border-zinc-700/50"
                     >
                       {tagLabel(t)}
                     </span>
@@ -1004,7 +963,7 @@ function ProblemsPage() {
               <div className="flex items-center self-start md:self-center">
                 <Link
                   to={`/problems/${dailyChallenge.slug || dailyChallenge._id}`}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm shadow-md shadow-orange-600/20 hover:scale-105 active:scale-95 transition-all duration-150 cursor-pointer"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 font-bold text-sm shadow-md shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all duration-150 cursor-pointer"
                 >
                   <span>Solve Challenge</span>
                   <ChevronRight className="w-4 h-4" />
@@ -1014,18 +973,18 @@ function ProblemsPage() {
           </div>
         )}
 
-        <div className="bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl shadow-xs overflow-hidden">
           {/* ============================================================ */}
           {/* TITLE BAR                                                    */}
           {/* ============================================================ */}
-          <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+          <div className="px-6 py-5 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-black text-zinc-100 tracking-tight">
                 All Problems
               </h1>
 
               {/* View Toggle (List vs Grid) */}
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center bg-zinc-800/70 p-0.5 rounded-lg border border-zinc-700/60">
                 <button
                   type="button"
                   onClick={() => {
@@ -1034,8 +993,8 @@ function ProblemsPage() {
                   }}
                   className={`p-1.5 rounded-md transition cursor-pointer ${
                     viewMode === 'grid'
-                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-2xs'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-zinc-750 text-amber-400 shadow-2xs'
+                      : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                   title="Grid View"
                 >
@@ -1049,8 +1008,8 @@ function ProblemsPage() {
                   }}
                   className={`p-1.5 rounded-md transition cursor-pointer ${
                     viewMode === 'list'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-2xs'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-zinc-750 text-emerald-400 shadow-2xs'
+                      : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                   title="List View"
                 >
@@ -1060,8 +1019,8 @@ function ProblemsPage() {
             </div>
 
             {/* Total Problems Count Pill */}
-            <div className="inline-flex items-center px-3.5 py-1 bg-slate-100/90 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-full">
-              <span className="text-xs font-black tracking-wider text-slate-600 dark:text-slate-300 uppercase font-mono">
+            <div className="inline-flex items-center px-3.5 py-1 bg-zinc-800/80 border border-zinc-700/60 rounded-full">
+              <span className="text-xs font-black tracking-wider text-zinc-300 uppercase font-mono">
                 {totalProblems} PROBLEMS
               </span>
             </div>
@@ -1070,22 +1029,22 @@ function ProblemsPage() {
           {/* ============================================================ */}
           {/* FILTER & SEARCH TOOLBAR                                      */}
           {/* ============================================================ */}
-          <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex flex-wrap items-center gap-3">
+          <div className="p-4 sm:p-5 border-b border-zinc-800 bg-zinc-950/40 flex flex-wrap items-center gap-3">
             {/* 1. Live Search Input */}
             <div className="relative flex-1 min-w-[240px]">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by problem name, topic, or company..."
-                className="w-full pl-10 pr-9 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-2xs"
+                className="w-full pl-10 pr-9 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs sm:text-sm font-medium text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 p-0.5 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1101,19 +1060,19 @@ function ProblemsPage() {
                   onClick={() =>
                     setOpenDropdown(openDropdown === 'topic' ? null : 'topic')
                   }
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 bg-zinc-900 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
                     selectedTopic !== 'All'
-                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                      ? 'border-amber-500 text-amber-400'
+                      : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
                   }`}
                 >
-                  <Tag className="w-3.5 h-3.5 text-slate-400" />
+                  <Tag className="w-3.5 h-3.5 text-zinc-400" />
                   <span>{selectedTopic === 'All' ? 'Topic' : selectedTopic}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                 </button>
 
                 {openDropdown === 'topic' && (
-                  <div className="absolute top-full mt-1.5 left-0 z-30 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
+                  <div className="absolute top-full mt-1.5 left-0 z-30 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => {
@@ -1121,11 +1080,11 @@ function ProblemsPage() {
                         setOpenDropdown(null);
                         triggerToast('Showing all topics');
                       }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
                     >
                       <span>All Topics</span>
                       {selectedTopic === 'All' && (
-                        <Check className="w-3.5 h-3.5 text-blue-600" />
+                        <Check className="w-3.5 h-3.5 text-amber-400" />
                       )}
                     </button>
                     {availableTags.map((item) => (
@@ -1137,13 +1096,13 @@ function ProblemsPage() {
                           setOpenDropdown(null);
                           triggerToast(`Topic: ${tagLabel(item.tag)}`, '📁');
                         }}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
                       >
                         <span>{tagLabel(item.tag)}</span>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-slate-400 font-mono">({item.count})</span>
+                          <span className="text-[10px] text-zinc-500 font-mono">({item.count})</span>
                           {selectedTopic === item.tag && (
-                            <Check className="w-3.5 h-3.5 text-blue-600" />
+                            <Check className="w-3.5 h-3.5 text-amber-400" />
                           )}
                         </div>
                       </button>
@@ -1159,23 +1118,23 @@ function ProblemsPage() {
                   onClick={() =>
                     setOpenDropdown(openDropdown === 'diff' ? null : 'diff')
                   }
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+                  className={`inline-flex items-center gap-2 px-3.5 py-2 bg-zinc-900 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
                     selectedDifficulty !== 'All'
-                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                      ? 'border-amber-500 text-amber-400'
+                      : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
                   }`}
                 >
-                  <BarChart2 className="w-3.5 h-3.5 text-slate-400" />
+                  <BarChart2 className="w-3.5 h-3.5 text-zinc-400" />
                   <span>
                     {selectedDifficulty === 'All'
                       ? 'Difficulty'
                       : selectedDifficulty}
                   </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                 </button>
 
                 {openDropdown === 'diff' && (
-                  <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
+                  <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
                     {['All', 'Easy', 'Medium', 'Hard'].map((diff) => (
                       <button
                         key={diff}
@@ -1190,11 +1149,11 @@ function ProblemsPage() {
                             '📊'
                           );
                         }}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
                       >
                         <span>{diff === 'All' ? 'All Difficulties' : diff}</span>
                         {selectedDifficulty === diff && (
-                          <Check className="w-3.5 h-3.5 text-blue-600" />
+                          <Check className="w-3.5 h-3.5 text-amber-400" />
                         )}
                       </button>
                     ))}
@@ -1210,21 +1169,21 @@ function ProblemsPage() {
                     onClick={() =>
                       setOpenDropdown(openDropdown === 'comp' ? null : 'comp')
                     }
-                    className={`inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
+                    className={`inline-flex items-center gap-2 px-3.5 py-2 bg-zinc-900 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
                       selectedCompany !== 'All'
-                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                        ? 'border-amber-500 text-amber-400'
+                        : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
                     }`}
                   >
-                    <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                    <Building2 className="w-3.5 h-3.5 text-zinc-400" />
                     <span>
                       {selectedCompany === 'All' ? 'Company' : selectedCompany}
                     </span>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                   </button>
 
                   {openDropdown === 'comp' && (
-                    <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
                       {availableCompanies.map((comp) => (
                         <button
                           key={comp}
@@ -1239,11 +1198,11 @@ function ProblemsPage() {
                               '🏢'
                             );
                           }}
-                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
                         >
                           <span>{comp === 'All' ? 'All Companies' : comp}</span>
                           {selectedCompany === comp && (
-                            <Check className="w-3.5 h-3.5 text-blue-600" />
+                            <Check className="w-3.5 h-3.5 text-amber-400" />
                           )}
                         </button>
                       ))}
@@ -1252,23 +1211,23 @@ function ProblemsPage() {
                 </div>
               )}
 
-              {/* 5. Sort Dropdown (With Green Indicator Dot) */}
+              {/* 5. Sort Dropdown */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() =>
                     setOpenDropdown(openDropdown === 'sort' ? null : 'sort')
                   }
-                  className="relative inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border border-emerald-600/90 dark:border-emerald-500 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition shadow-2xs cursor-pointer"
+                  className="relative inline-flex items-center gap-2 px-3.5 py-2 bg-zinc-900 border border-emerald-500/80 rounded-xl text-xs font-bold text-emerald-400 hover:bg-emerald-950/20 transition shadow-2xs cursor-pointer"
                 >
-                  <ArrowUpDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <ArrowUpDown className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Sort</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <ChevronDown className="w-3.5 h-3.5 text-emerald-400" />
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
                 </button>
 
                 {openDropdown === 'sort' && (
-                  <div className="absolute top-full mt-1.5 right-0 z-30 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
+                  <div className="absolute top-full mt-1.5 right-0 z-30 w-52 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
                     {[
                       { id: 'default', label: 'Default (Newest)' },
                       { id: 'number', label: 'Problem Number (#1..N)' },
@@ -1285,11 +1244,11 @@ function ProblemsPage() {
                           setOpenDropdown(null);
                           triggerToast(`Sorted: ${s.label}`, '📊');
                         }}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
                       >
                         <span>{s.label}</span>
                         {selectedSort === s.id && (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
                         )}
                       </button>
                     ))}
@@ -1310,11 +1269,11 @@ function ProblemsPage() {
                   }}
                   className={`inline-flex items-center gap-1.5 px-3.5 py-2 border rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer ${
                     onlyBookmarked
-                      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 text-amber-600 dark:text-amber-400'
-                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                      ? 'bg-amber-500/10 border-amber-400/80 text-amber-400'
+                      : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
                   }`}
                 >
-                  <Star className={`w-3.5 h-3.5 ${onlyBookmarked ? 'fill-amber-400 text-amber-500' : 'text-slate-400'}`} />
+                  <Star className={`w-3.5 h-3.5 ${onlyBookmarked ? 'fill-amber-400 text-amber-400' : 'text-zinc-500'}`} />
                   <span>Bookmarked{bookmarkedIds.size > 0 ? ` (${bookmarkedIds.size})` : ''}</span>
                 </button>
               )}
@@ -1337,7 +1296,7 @@ function ProblemsPage() {
                     setSearchQuery('');
                     triggerToast('All filters reset', '🔄');
                   }}
-                  className="px-2.5 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                  className="px-2.5 py-1.5 text-xs font-bold text-rose-400 hover:text-rose-300 hover:underline cursor-pointer"
                 >
                   Reset
                 </button>
@@ -1349,7 +1308,7 @@ function ProblemsPage() {
           {/* TABLE COLUMN HEADER STRIP (List View)                        */}
           {/* ============================================================ */}
           {viewMode === 'list' && (
-            <div className="hidden sm:grid grid-cols-12 px-6 py-3 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold tracking-wider text-slate-500 dark:text-slate-400 uppercase select-none">
+            <div className="hidden sm:grid grid-cols-12 px-6 py-3 bg-zinc-900/90 border-b border-zinc-800 text-[11px] font-extrabold tracking-wider text-zinc-400 uppercase select-none">
               <div className="col-span-1">STATUS</div>
               <div className="col-span-5">PROBLEM</div>
               <div className="col-span-3">{SHOW_MOCK_COMPANY_TAGS ? 'COMPANIES' : 'TAGS'}</div>
@@ -1366,32 +1325,32 @@ function ProblemsPage() {
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-800/80"
+                  className="flex items-center justify-between p-4 bg-zinc-900/40 rounded-xl border border-zinc-800/80"
                 >
                   <div className="flex items-center gap-3 w-1/2">
-                    <div className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-750 shrink-0" />
+                    <div className="w-5 h-5 rounded-md bg-zinc-800 shrink-0" />
                     <div className="space-y-1.5 w-full">
-                      <div className="h-4 bg-slate-200 dark:bg-slate-750 rounded w-3/4" />
-                      <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-1/3" />
+                      <div className="h-4 bg-zinc-800 rounded w-3/4" />
+                      <div className="h-3 bg-zinc-850 rounded w-1/3" />
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="h-6 w-16 bg-slate-200 dark:bg-slate-750 rounded-full" />
-                    <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded hidden sm:block" />
-                    <div className="h-4 w-12 bg-slate-100 dark:bg-slate-800 rounded hidden sm:block" />
+                    <div className="h-6 w-16 bg-zinc-800 rounded-full" />
+                    <div className="h-4 w-12 bg-zinc-850 rounded hidden sm:block" />
+                    <div className="h-4 w-12 bg-zinc-850 rounded hidden sm:block" />
                   </div>
                 </div>
               ))}
             </div>
           ) : hierarchicalTopics.length === 0 ? (
             <div className="p-16 text-center space-y-3 select-none">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto">
                 <Search className="w-6 h-6" />
               </div>
-              <p className="text-slate-800 dark:text-slate-200 text-sm font-bold">
+              <p className="text-zinc-200 text-sm font-bold">
                 No problems found matching your filters.
               </p>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              <p className="text-xs text-zinc-500 max-w-sm mx-auto">
                 Try searching with different keywords, removing tag constraints, or clearing filters.
               </p>
               <button
@@ -1403,13 +1362,13 @@ function ProblemsPage() {
                   setSelectedCompany('All');
                   setOnlyBookmarked(false);
                 }}
-                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
               >
                 Clear Filters
               </button>
             </div>
           ) : viewMode === 'list' ? (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="divide-y divide-zinc-800">
               {hierarchicalTopics.map((topic) => {
                   const isTopicOpen = !!expandedTopics[topic.name];
 
@@ -1419,26 +1378,26 @@ function ProblemsPage() {
                       <button
                         type="button"
                         onClick={() => toggleTopic(topic.name)}
-                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition text-left group cursor-pointer"
+                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-zinc-800/50 transition text-left group cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
                           {isTopicOpen ? (
-                            <ChevronDown className="w-4 h-4 text-slate-700 dark:text-slate-300 transition-transform duration-200" />
+                            <ChevronDown className="w-4 h-4 text-zinc-300 transition-transform duration-200" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-transform" />
+                            <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-transform" />
                           )}
-                          <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                          <span className="font-extrabold text-zinc-100 text-sm sm:text-base group-hover:text-amber-400 transition">
                             {topic.name}
                           </span>
                         </div>
-                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 font-mono">
+                        <span className="text-xs font-semibold text-zinc-400 font-mono">
                           {topic.totalCount} {topic.totalCount === 1 ? 'Problem' : 'Problems'}
                         </span>
                       </button>
 
                       {/* LEVEL 2: DIFFICULTY SUB-TIERS */}
                       {isTopicOpen && (
-                        <div className="bg-slate-50/40 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 pl-4 sm:pl-8">
+                        <div className="bg-zinc-950/40 border-t border-zinc-800/80 divide-y divide-zinc-800/80 pl-4 sm:pl-8">
                           {topic.difficulties
                             .filter((diff) => diff.count > 0)
                             .map((diff) => {
@@ -1454,40 +1413,40 @@ function ProblemsPage() {
                                     onClick={() =>
                                       toggleDifficulty(topic.name, diff.name)
                                     }
-                                    className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition text-left group cursor-pointer"
+                                    className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-zinc-800/40 transition text-left group cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3">
                                       {isDiffOpen ? (
                                         <ChevronDown
                                           className={`w-4 h-4 transition-transform ${
                                             diff.name === 'Easy'
-                                              ? 'text-emerald-600 dark:text-emerald-400'
+                                              ? 'text-emerald-400'
                                               : diff.name === 'Medium'
-                                              ? 'text-blue-600 dark:text-blue-400'
-                                              : 'text-rose-600 dark:text-rose-400'
+                                              ? 'text-amber-400'
+                                              : 'text-rose-400'
                                           }`}
                                         />
                                       ) : (
-                                        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-transform" />
+                                        <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-transform" />
                                       )}
                                       <span
                                         className={`text-xs sm:text-sm ${
                                           isDiffOpen
-                                            ? 'font-bold text-slate-900 dark:text-white'
-                                            : 'font-semibold text-slate-700 dark:text-slate-300'
+                                            ? 'font-bold text-zinc-100'
+                                            : 'font-semibold text-zinc-300'
                                         }`}
                                       >
                                         {diff.name}
                                       </span>
                                     </div>
-                                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                                    <span className="text-xs text-zinc-400 font-mono">
                                       {diff.count} {diff.count === 1 ? 'Problem' : 'Problems'}
                                     </span>
                                   </button>
 
                                   {/* LEVEL 3: CONCRETE PROBLEM ROWS */}
                                   {isDiffOpen && (
-                                    <div className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800 pl-4">
+                                    <div className="divide-y divide-zinc-800/60 bg-zinc-900/50 border-t border-zinc-800/80 pl-4">
                                       {diff.problems.map((problem) => {
                                         const isSolved = solvedIds.includes(
                                           problem._id
@@ -1499,21 +1458,21 @@ function ProblemsPage() {
                                             onClick={() =>
                                               handleProblemClick(problem)
                                             }
-                                            className="grid grid-cols-12 px-4 py-3 items-center hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition group cursor-pointer"
+                                            className="grid grid-cols-12 px-4 py-3 items-center hover:bg-zinc-800/50 transition group cursor-pointer"
                                           >
                                             {/* Status Badge */}
                                             <div className="col-span-1">
                                               {isSolved ? (
                                                 <span
                                                   title="Solved in MongoDB"
-                                                  className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs shadow-2xs"
+                                                  className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-xs shadow-2xs"
                                                 >
                                                   ✓
                                                 </span>
                                               ) : (
                                                 <span
                                                   title="Unsolved"
-                                                  className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600 inline-block"
+                                                  className="w-4 h-4 rounded-full border border-zinc-600 inline-block"
                                                 ></span>
                                               )}
                                             </div>
@@ -1524,28 +1483,28 @@ function ProblemsPage() {
                                                 type="button"
                                                 onClick={(e) => handleToggleBookmark(e, problem._id)}
                                                 title={bookmarkedIds.has(String(problem._id)) ? 'Remove Bookmark' : 'Bookmark Problem'}
-                                                className="p-1 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/30 transition shrink-0 cursor-pointer"
+                                                className="p-1 rounded-md hover:bg-amber-500/10 transition shrink-0 cursor-pointer"
                                               >
                                                 <Star
                                                   className={`w-3.5 h-3.5 transition ${
                                                     bookmarkedIds.has(String(problem._id))
-                                                      ? 'fill-amber-400 text-amber-500'
-                                                      : 'text-slate-300 dark:text-slate-600 hover:text-amber-400'
+                                                      ? 'fill-amber-400 text-amber-400'
+                                                      : 'text-zinc-600 hover:text-amber-400'
                                                   }`}
                                                 />
                                               </button>
-                                              <span className="font-semibold text-xs sm:text-sm text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate">
+                                              <span className="font-semibold text-xs sm:text-sm text-zinc-100 group-hover:text-amber-400 transition truncate">
                                                 {problem.problemNumber != null ? `#${problem.problemNumber}. ` : ''}{problem.title}
                                               </span>
                                             </div>
 
-                                            {/* Companies */}
+                                            {/* Tags */}
                                             <div className="col-span-3 flex flex-wrap gap-1 items-center">
                                               {SHOW_MOCK_COMPANY_TAGS ? (
                                                 problem.companies.map((comp) => (
                                                   <span
                                                     key={comp}
-                                                    className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-400"
+                                                    className="px-2 py-0.5 bg-zinc-800 rounded-md text-[10px] font-bold text-zinc-300 border border-zinc-700/50"
                                                   >
                                                     {comp}
                                                   </span>
@@ -1555,13 +1514,13 @@ function ProblemsPage() {
                                                   {normalizeTags(problem.tags).slice(0, 3).map((tag) => (
                                                     <span
                                                       key={tag}
-                                                      className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 rounded-md text-[10px] font-semibold"
+                                                      className="px-2 py-0.5 bg-zinc-800/80 text-zinc-300 border border-zinc-700/50 rounded-md text-[10px] font-semibold"
                                                     >
                                                       {tagLabel(tag)}
                                                     </span>
                                                   ))}
                                                   {normalizeTags(problem.tags).length > 3 && (
-                                                    <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-md text-[9px] font-bold">
+                                                    <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded-md text-[9px] font-bold border border-zinc-700/40">
                                                       +{normalizeTags(problem.tags).length - 3}
                                                     </span>
                                                   )}
@@ -1570,7 +1529,7 @@ function ProblemsPage() {
                                             </div>
 
                                             {/* Submissions */}
-                                            <div className="col-span-2 text-right text-xs font-mono text-slate-500 dark:text-slate-400">
+                                            <div className="col-span-2 text-right text-xs font-mono text-zinc-400">
                                               {problem.submissions}
                                             </div>
 
@@ -1578,8 +1537,8 @@ function ProblemsPage() {
                                             <div
                                               className={`col-span-1 text-right text-xs font-bold ${
                                                 problem.accuracyVal >= 50
-                                                  ? 'text-emerald-600 dark:text-emerald-400'
-                                                  : 'text-slate-600 dark:text-slate-400'
+                                                  ? 'text-emerald-400'
+                                                  : 'text-zinc-400'
                                               }`}
                                             >
                                               {problem.accuracy}
@@ -1606,46 +1565,46 @@ function ProblemsPage() {
               {hierarchicalTopics.map((topic) => (
                 <div
                   key={topic.name}
-                  className="p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-sm transition flex flex-col justify-between"
+                  className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/70 shadow-xs hover:border-zinc-700 hover:shadow-md transition flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                      <span className="font-extrabold text-base text-slate-900 dark:text-white">
+                    <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                      <span className="font-extrabold text-base text-zinc-100">
                         {topic.name}
                       </span>
-                      <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full">
+                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
                         {topic.totalCount} Qs
                       </span>
                     </div>
 
                     <div className="pt-3.5 space-y-2">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      <p className="text-xs text-zinc-400 font-medium">
                         Difficulty Tiers:
                       </p>
                       <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
-                        <div className="bg-emerald-50 dark:bg-emerald-950/30 p-2 rounded-xl">
-                          <span className="block text-emerald-600 dark:text-emerald-400">
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-xl">
+                          <span className="block text-emerald-400">
                             Easy
                           </span>
-                          <span className="text-emerald-700 dark:text-emerald-300 font-mono">
+                          <span className="text-emerald-300 font-mono">
                             {topic.difficulties.find((d) => d.name === 'Easy')
                               ?.count || 0}
                           </span>
                         </div>
-                        <div className="bg-blue-50 dark:bg-blue-950/30 p-2 rounded-xl">
-                          <span className="block text-blue-600 dark:text-blue-400">
+                        <div className="bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl">
+                          <span className="block text-amber-400">
                             Med
                           </span>
-                          <span className="text-blue-700 dark:text-blue-300 font-mono">
+                          <span className="text-amber-300 font-mono">
                             {topic.difficulties.find((d) => d.name === 'Medium')
                               ?.count || 0}
                           </span>
                         </div>
-                        <div className="bg-rose-50 dark:bg-rose-950/30 p-2 rounded-xl">
-                          <span className="block text-rose-600 dark:text-rose-400">
+                        <div className="bg-rose-500/10 border border-rose-500/20 p-2 rounded-xl">
+                          <span className="block text-rose-400">
                             Hard
                           </span>
-                          <span className="text-rose-700 dark:text-rose-300 font-mono">
+                          <span className="text-rose-300 font-mono">
                             {topic.difficulties.find((d) => d.name === 'Hard')
                               ?.count || 0}
                           </span>
@@ -1654,8 +1613,8 @@ function ProblemsPage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-xs text-slate-400">
+                  <div className="pt-4 mt-4 border-t border-zinc-800 flex items-center justify-between">
+                    <span className="text-xs text-zinc-400">
                       {topic.totalCount} Questions Available
                     </span>
                     <button
@@ -1668,7 +1627,7 @@ function ProblemsPage() {
                           [topic.name]: true,
                         }));
                       }}
-                      className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-xs font-bold text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <span>Explore</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -1681,10 +1640,10 @@ function ProblemsPage() {
 
           {/* Pagination Controls */}
           {totalProblems > 0 && (
-            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Showing page <span className="font-bold text-slate-800 dark:text-slate-200">{page}</span> of{' '}
-                <span className="font-bold text-slate-800 dark:text-slate-200">{totalPages || 1}</span> ({totalProblems} {totalProblems === 1 ? 'problem' : 'problems'})
+            <div className="px-6 py-4 border-t border-zinc-800 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-zinc-400 font-medium">
+                Showing page <span className="font-bold text-zinc-200">{page}</span> of{' '}
+                <span className="font-bold text-zinc-200">{totalPages || 1}</span> ({totalProblems} {totalProblems === 1 ? 'problem' : 'problems'})
               </div>
 
               <div className="flex items-center space-x-1.5">
@@ -1692,7 +1651,7 @@ function ProblemsPage() {
                   type="button"
                   onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
                   disabled={page <= 1 || loading}
-                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
                 >
                   Previous
                 </button>
@@ -1707,8 +1666,8 @@ function ProblemsPage() {
                       disabled={loading}
                       className={`w-7 h-7 rounded-lg text-xs font-bold transition flex items-center justify-center cursor-pointer ${
                         pNum === page
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750'
+                          ? 'bg-amber-500 text-zinc-950 shadow-xs font-bold'
+                          : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800'
                       }`}
                     >
                       {pNum}
@@ -1719,7 +1678,7 @@ function ProblemsPage() {
                   type="button"
                   onClick={() => setPage((prev) => Math.min(prev + 1, totalPages || 1))}
                   disabled={page >= (totalPages || 1) || loading}
-                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
                 >
                   Next
                 </button>
@@ -1731,7 +1690,7 @@ function ProblemsPage() {
 
       {/* 3. TOAST NOTIFICATION */}
       <div
-        className={`fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs flex items-center space-x-2.5 transform transition-all duration-300 border border-slate-700 ${
+        className={`fixed bottom-6 right-6 z-50 bg-zinc-900 text-zinc-100 px-4 py-2.5 rounded-xl shadow-2xl text-xs flex items-center space-x-2.5 transform transition-all duration-300 border border-zinc-700 ${
           toast.show
             ? 'translate-y-0 opacity-100'
             : 'translate-y-20 opacity-0 pointer-events-none'

@@ -44,7 +44,7 @@ function ProfileNavbar({
             <Link to="/explore" className="hover:text-blue-600 transition">
               Explore
             </Link>
-            <Link to="/compiler" className="hover:text-blue-600 transition">
+            <Link to="/playground" className="hover:text-blue-600 transition">
               Playground
             </Link>
           </nav>
@@ -58,7 +58,7 @@ function ProfileNavbar({
             className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-700 px-3 py-1 rounded-full text-xs font-bold shadow-2xs select-none"
           >
             <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
-            <span className="font-mono">{streakCount}</span>
+            <span className="font-mono">{user?.streakCount ?? streakCount ?? 0}</span>
           </div>
 
           {/* Notifications Button */}

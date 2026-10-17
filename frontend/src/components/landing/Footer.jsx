@@ -117,7 +117,7 @@ function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/compiler" className="hover:text-white transition">
+                <Link to="/playground" className="hover:text-white transition">
                   Online Playground
                 </Link>
               </li>

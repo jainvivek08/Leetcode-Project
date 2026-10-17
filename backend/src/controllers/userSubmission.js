@@ -276,10 +276,43 @@ const submitCode = async (req, res) => {
         submittedResult.memoryPercentile = memoryPercentile;
         await submittedResult.save();
 
-        await User.updateOne(
-          { _id: userId },
-          { $addToSet: { problemSolved: problemId } }
-        );
+        let userStreak = 0;
+        let lastSolvedDate = null;
+        const user = await User.findById(userId);
+        if (user) {
+          if (!user.problemSolved.some((id) => id.toString() === problem._id.toString())) {
+            user.problemSolved.push(problem._id);
+          }
+
+          const now = new Date();
+          if (!user.lastSolvedDate) {
+            user.streakCount = 1;
+            user.lastSolvedDate = now;
+          } else {
+            const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const lastMidnight = new Date(
+              user.lastSolvedDate.getFullYear(),
+              user.lastSolvedDate.getMonth(),
+              user.lastSolvedDate.getDate()
+            );
+            const diffDays = Math.round((todayMidnight - lastMidnight) / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) {
+              // Already solved today, keep current streak
+            } else if (diffDays === 1) {
+              // Consecutive day solved before midnight!
+              user.streakCount = (user.streakCount || 0) + 1;
+              user.lastSolvedDate = now;
+            } else {
+              // 2 or more days gap: Streak broken, restart new streak
+              user.streakCount = 1;
+              user.lastSolvedDate = now;
+            }
+          }
+          await user.save();
+          userStreak = user.streakCount;
+          lastSolvedDate = user.lastSolvedDate;
+        }
       } else {
         await submittedResult.save();
       }
@@ -296,6 +329,8 @@ const submitCode = async (req, res) => {
         status: finalStatus,
         errorMessage,
         failedTestCase,
+        streakCount: userStreak,
+        lastSolvedDate,
       });
     } catch (judgeErr) {
       console.error("Judge0 execution failed in submitCode:", judgeErr.message);
@@ -334,7 +369,14 @@ const runCode = async (req, res) => {
 
     const trimmedId = problemId.trim();
     let problem;
-    if (mongoose.isValidObjectId(trimmedId)) {
+    if (trimmedId === 'playground' || trimmedId === 'compiler' || trimmedId === 'sandbox') {
+      problem = {
+        _id: 'playground',
+        title: 'Code Playground',
+        timeLimit: 2000,
+        memoryLimit: 256000,
+      };
+    } else if (mongoose.isValidObjectId(trimmedId)) {
       problem = await Problem.findById(trimmedId);
     } else {
       problem = await Problem.findOne({ slug: trimmedId.toLowerCase() });
@@ -359,6 +401,11 @@ const runCode = async (req, res) => {
 
     language = normalizeLanguage(language);
     const languageId = getLanguageById(language);
+
+    // In playground mode, default customInput to empty string if undefined so it executes standard code
+    if ((trimmedId === 'playground' || trimmedId === 'compiler' || trimmedId === 'sandbox') && customInput === undefined) {
+      customInput = '';
+    }
 
     // Mode B: Custom Input Run
     if (customInput !== undefined) {
