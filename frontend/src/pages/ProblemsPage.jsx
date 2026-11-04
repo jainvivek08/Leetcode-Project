@@ -831,21 +831,21 @@ function ProblemsPage() {
   }, [liveProblems]);
 
   return (
-    <div className="min-h-screen flex flex-col antialiased selection:bg-amber-500/20 selection:text-amber-300 bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen flex flex-col antialiased selection:bg-amber-500/20 selection:text-amber-300 bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 transition-colors">
       {/* 1. TOP NAVBAR */}
-      <header className="sticky top-0 z-40 bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800 shadow-2xs">
+      <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-zinc-800 shadow-2xs">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-15 flex items-center justify-between gap-4">
           <div className="flex items-center space-x-7">
             <Link to="/" className="flex items-center space-x-2.5 group">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#f97316] to-[#ea580c] text-white flex items-center justify-center font-extrabold text-xs shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
                 &lt;/&gt;
               </div>
-              <span className="font-extrabold text-lg tracking-tight text-zinc-100">
+              <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-zinc-100">
                 Code<span className="text-amber-500">Quest</span>
               </span>
             </Link>
 
-            <nav className="hidden md:flex items-center space-x-6 text-[13px] font-semibold text-zinc-400">
+            <nav className="hidden md:flex items-center space-x-6 text-[13px] font-semibold text-slate-500 dark:text-zinc-400">
               <Link
                 to="/problems"
                 className="text-amber-400 font-extrabold flex items-center gap-1.5 py-4 border-b-2 border-amber-500"
@@ -854,13 +854,13 @@ function ProblemsPage() {
               </Link>
               <Link
                 to="/explore"
-                className="hover:text-zinc-100 transition"
+                className="hover:text-slate-900 dark:hover:text-zinc-100 transition"
               >
                 Explore
               </Link>
               <Link
                 to="/playground"
-                className="hover:text-zinc-100 transition"
+                className="hover:text-slate-900 dark:hover:text-zinc-100 transition"
               >
                 Playground
               </Link>
@@ -916,7 +916,7 @@ function ProblemsPage() {
       <main className="max-w-[1360px] mx-auto px-4 sm:px-6 py-6 w-full flex-1">
         {/* Daily Challenge Banner */}
         {dailyChallenge && (
-          <div className="mb-6 relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900/80 rounded-2xl border border-amber-500/20 p-5 sm:p-6 shadow-xs">
+          <div className="mb-6 relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 rounded-2xl border border-amber-500/30 p-5 sm:p-6 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
               <div className="space-y-2.5">
                 <div className="flex items-center gap-2.5">
@@ -932,7 +932,7 @@ function ProblemsPage() {
                 </div>
 
                 <div className="flex items-baseline gap-3">
-                  <h2 className="text-xl sm:text-2xl font-black text-zinc-100 tracking-tight">
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-zinc-100 tracking-tight">
                     {dailyChallenge.problemNumber ? `#${dailyChallenge.problemNumber}. ` : ''}
                     {dailyChallenge.title}
                   </h2>
@@ -952,7 +952,7 @@ function ProblemsPage() {
                   {normalizeTags(dailyChallenge.tags).map((t) => (
                     <span
                       key={t}
-                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-800/80 text-zinc-300 border border-zinc-700/50"
+                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700/50"
                     >
                       {tagLabel(t)}
                     </span>
@@ -973,18 +973,18 @@ function ProblemsPage() {
           </div>
         )}
 
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl shadow-xs overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-xs overflow-hidden">
           {/* ============================================================ */}
           {/* TITLE BAR                                                    */}
           {/* ============================================================ */}
-          <div className="px-6 py-5 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-4">
+          <div className="px-6 py-5 border-b border-slate-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl sm:text-2xl font-black text-zinc-100 tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-zinc-100 tracking-tight">
                 All Problems
               </h1>
 
               {/* View Toggle (List vs Grid) */}
-              <div className="flex items-center bg-zinc-800/70 p-0.5 rounded-lg border border-zinc-700/60">
+              <div className="flex items-center bg-slate-100 dark:bg-zinc-800/70 p-0.5 rounded-lg border border-slate-200 dark:border-zinc-700/60">
                 <button
                   type="button"
                   onClick={() => {
@@ -993,7 +993,7 @@ function ProblemsPage() {
                   }}
                   className={`p-1.5 rounded-md transition cursor-pointer ${
                     viewMode === 'grid'
-                      ? 'bg-zinc-750 text-amber-400 shadow-2xs'
+                      ? 'bg-white dark:bg-zinc-700 text-amber-600 dark:text-amber-400 shadow-xs'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                   title="Grid View"
@@ -1008,7 +1008,7 @@ function ProblemsPage() {
                   }}
                   className={`p-1.5 rounded-md transition cursor-pointer ${
                     viewMode === 'list'
-                      ? 'bg-zinc-750 text-emerald-400 shadow-2xs'
+                      ? 'bg-white dark:bg-zinc-700 text-emerald-600 dark:text-emerald-400 shadow-xs'
                       : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                   title="List View"
@@ -1019,8 +1019,8 @@ function ProblemsPage() {
             </div>
 
             {/* Total Problems Count Pill */}
-            <div className="inline-flex items-center px-3.5 py-1 bg-zinc-800/80 border border-zinc-700/60 rounded-full">
-              <span className="text-xs font-black tracking-wider text-zinc-300 uppercase font-mono">
+            <div className="inline-flex items-center px-3.5 py-1 bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-700/60 rounded-full">
+              <span className="text-xs font-black tracking-wider text-slate-600 dark:text-zinc-300 uppercase font-mono">
                 {totalProblems} PROBLEMS
               </span>
             </div>
@@ -1029,22 +1029,22 @@ function ProblemsPage() {
           {/* ============================================================ */}
           {/* FILTER & SEARCH TOOLBAR                                      */}
           {/* ============================================================ */}
-          <div className="p-4 sm:p-5 border-b border-zinc-800 bg-zinc-950/40 flex flex-wrap items-center gap-3">
+          <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-950/40 flex flex-wrap items-center gap-3">
             {/* 1. Live Search Input */}
             <div className="relative flex-1 min-w-[240px]">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 dark:text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by problem name, topic, or company..."
-                className="w-full pl-10 pr-9 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs sm:text-sm font-medium text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs"
+                className="w-full pl-10 pr-9 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs sm:text-sm font-medium text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-2xs"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 p-0.5 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:hover:text-zinc-200 p-0.5 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1072,7 +1072,7 @@ function ProblemsPage() {
                 </button>
 
                 {openDropdown === 'topic' && (
-                  <div className="absolute top-full mt-1.5 left-0 z-30 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
+                  <div className="absolute top-full mt-1.5 left-0 z-30 w-56 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
                     <button
                       type="button"
                       onClick={() => {
@@ -1080,7 +1080,7 @@ function ProblemsPage() {
                         setOpenDropdown(null);
                         triggerToast('Showing all topics');
                       }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 flex items-center justify-between cursor-pointer"
                     >
                       <span>All Topics</span>
                       {selectedTopic === 'All' && (
@@ -1096,11 +1096,11 @@ function ProblemsPage() {
                           setOpenDropdown(null);
                           triggerToast(`Topic: ${tagLabel(item.tag)}`, '📁');
                         }}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 flex items-center justify-between cursor-pointer"
                       >
                         <span>{tagLabel(item.tag)}</span>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-zinc-500 font-mono">({item.count})</span>
+                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">({item.count})</span>
                           {selectedTopic === item.tag && (
                             <Check className="w-3.5 h-3.5 text-amber-400" />
                           )}
@@ -1134,7 +1134,7 @@ function ProblemsPage() {
                 </button>
 
                 {openDropdown === 'diff' && (
-                  <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
+                  <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
                     {['All', 'Easy', 'Medium', 'Hard'].map((diff) => (
                       <button
                         key={diff}
@@ -1149,7 +1149,7 @@ function ProblemsPage() {
                             '📊'
                           );
                         }}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 flex items-center justify-between cursor-pointer"
                       >
                         <span>{diff === 'All' ? 'All Difficulties' : diff}</span>
                         {selectedDifficulty === diff && (
@@ -1183,7 +1183,7 @@ function ProblemsPage() {
                   </button>
 
                   {openDropdown === 'comp' && (
-                    <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
+                    <div className="absolute top-full mt-1.5 left-0 z-30 w-44 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5 max-h-60 overflow-y-auto">
                       {availableCompanies.map((comp) => (
                         <button
                           key={comp}
@@ -1198,7 +1198,7 @@ function ProblemsPage() {
                               '🏢'
                             );
                           }}
-                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 flex items-center justify-between cursor-pointer"
                         >
                           <span>{comp === 'All' ? 'All Companies' : comp}</span>
                           {selectedCompany === comp && (
@@ -1218,7 +1218,7 @@ function ProblemsPage() {
                   onClick={() =>
                     setOpenDropdown(openDropdown === 'sort' ? null : 'sort')
                   }
-                  className="relative inline-flex items-center gap-2 px-3.5 py-2 bg-zinc-900 border border-emerald-500/80 rounded-xl text-xs font-bold text-emerald-400 hover:bg-emerald-950/20 transition shadow-2xs cursor-pointer"
+                  className="relative inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-900 border border-emerald-500/80 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition shadow-2xs cursor-pointer"
                 >
                   <ArrowUpDown className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Sort</span>
@@ -1227,7 +1227,7 @@ function ProblemsPage() {
                 </button>
 
                 {openDropdown === 'sort' && (
-                  <div className="absolute top-full mt-1.5 right-0 z-30 w-52 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
+                  <div className="absolute top-full mt-1.5 right-0 z-30 w-52 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl p-1.5 text-xs font-medium space-y-0.5">
                     {[
                       { id: 'default', label: 'Default (Newest)' },
                       { id: 'number', label: 'Problem Number (#1..N)' },
@@ -1244,7 +1244,7 @@ function ProblemsPage() {
                           setOpenDropdown(null);
                           triggerToast(`Sorted: ${s.label}`, '📊');
                         }}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 text-zinc-200 flex items-center justify-between cursor-pointer"
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 flex items-center justify-between cursor-pointer"
                       >
                         <span>{s.label}</span>
                         {selectedSort === s.id && (
@@ -1308,7 +1308,7 @@ function ProblemsPage() {
           {/* TABLE COLUMN HEADER STRIP (List View)                        */}
           {/* ============================================================ */}
           {viewMode === 'list' && (
-            <div className="hidden sm:grid grid-cols-12 px-6 py-3 bg-zinc-900/90 border-b border-zinc-800 text-[11px] font-extrabold tracking-wider text-zinc-400 uppercase select-none">
+            <div className="hidden sm:grid grid-cols-12 px-6 py-3 bg-slate-100/90 dark:bg-zinc-900/90 border-b border-slate-200 dark:border-zinc-800 text-[11px] font-extrabold tracking-wider text-slate-500 dark:text-zinc-400 uppercase select-none">
               <div className="col-span-1">STATUS</div>
               <div className="col-span-5">PROBLEM</div>
               <div className="col-span-3">{SHOW_MOCK_COMPANY_TAGS ? 'COMPANIES' : 'TAGS'}</div>
@@ -1368,7 +1368,7 @@ function ProblemsPage() {
               </button>
             </div>
           ) : viewMode === 'list' ? (
-            <div className="divide-y divide-zinc-800">
+            <div className="divide-y divide-slate-200 dark:divide-zinc-800">
               {hierarchicalTopics.map((topic) => {
                   const isTopicOpen = !!expandedTopics[topic.name];
 
@@ -1378,26 +1378,26 @@ function ProblemsPage() {
                       <button
                         type="button"
                         onClick={() => toggleTopic(topic.name)}
-                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-zinc-800/50 transition text-left group cursor-pointer"
+                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-100/60 dark:hover:bg-zinc-800/50 transition text-left group cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
                           {isTopicOpen ? (
-                            <ChevronDown className="w-4 h-4 text-zinc-300 transition-transform duration-200" />
+                            <ChevronDown className="w-4 h-4 text-slate-500 dark:text-zinc-300 transition-transform duration-200" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-transform" />
+                            <ChevronRight className="w-4 h-4 text-slate-400 dark:text-zinc-500 group-hover:text-slate-600 dark:group-hover:text-zinc-300 transition-transform" />
                           )}
-                          <span className="font-extrabold text-zinc-100 text-sm sm:text-base group-hover:text-amber-400 transition">
+                          <span className="font-extrabold text-slate-900 dark:text-zinc-100 text-sm sm:text-base group-hover:text-amber-600 dark:group-hover:text-amber-400 transition">
                             {topic.name}
                           </span>
                         </div>
-                        <span className="text-xs font-semibold text-zinc-400 font-mono">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400 font-mono">
                           {topic.totalCount} {topic.totalCount === 1 ? 'Problem' : 'Problems'}
                         </span>
                       </button>
 
                       {/* LEVEL 2: DIFFICULTY SUB-TIERS */}
                       {isTopicOpen && (
-                        <div className="bg-zinc-950/40 border-t border-zinc-800/80 divide-y divide-zinc-800/80 pl-4 sm:pl-8">
+                        <div className="bg-slate-50/50 dark:bg-zinc-950/40 border-t border-slate-200/80 dark:border-zinc-800/80 divide-y divide-slate-200/80 dark:divide-zinc-800/80 pl-4 sm:pl-8">
                           {topic.difficulties
                             .filter((diff) => diff.count > 0)
                             .map((diff) => {
@@ -1413,7 +1413,7 @@ function ProblemsPage() {
                                     onClick={() =>
                                       toggleDifficulty(topic.name, diff.name)
                                     }
-                                    className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-zinc-800/40 transition text-left group cursor-pointer"
+                                    className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-slate-100/50 dark:hover:bg-zinc-800/40 transition text-left group cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3">
                                       {isDiffOpen ? (
@@ -1432,21 +1432,21 @@ function ProblemsPage() {
                                       <span
                                         className={`text-xs sm:text-sm ${
                                           isDiffOpen
-                                            ? 'font-bold text-zinc-100'
-                                            : 'font-semibold text-zinc-300'
+                                            ? 'font-bold text-slate-900 dark:text-zinc-100'
+                                            : 'font-semibold text-slate-600 dark:text-zinc-300'
                                         }`}
                                       >
                                         {diff.name}
                                       </span>
                                     </div>
-                                    <span className="text-xs text-zinc-400 font-mono">
+                                    <span className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                                       {diff.count} {diff.count === 1 ? 'Problem' : 'Problems'}
                                     </span>
                                   </button>
 
                                   {/* LEVEL 3: CONCRETE PROBLEM ROWS */}
                                   {isDiffOpen && (
-                                    <div className="divide-y divide-zinc-800/60 bg-zinc-900/50 border-t border-zinc-800/80 pl-4">
+                                    <div className="divide-y divide-slate-100 dark:divide-zinc-800/60 bg-white dark:bg-zinc-900/50 border-t border-slate-200 dark:border-zinc-800/80 pl-4">
                                       {diff.problems.map((problem) => {
                                         const isSolved = solvedIds.includes(
                                           problem._id
@@ -1458,7 +1458,7 @@ function ProblemsPage() {
                                             onClick={() =>
                                               handleProblemClick(problem)
                                             }
-                                            className="grid grid-cols-12 px-4 py-3 items-center hover:bg-zinc-800/50 transition group cursor-pointer"
+                                            className="grid grid-cols-12 px-4 py-3 items-center hover:bg-slate-100/70 dark:hover:bg-zinc-800/50 transition group cursor-pointer"
                                           >
                                             {/* Status Badge */}
                                             <div className="col-span-1">
@@ -1472,7 +1472,7 @@ function ProblemsPage() {
                                               ) : (
                                                 <span
                                                   title="Unsolved"
-                                                  className="w-4 h-4 rounded-full border border-zinc-600 inline-block"
+                                                  className="w-4 h-4 rounded-full border border-slate-300 dark:border-zinc-600 inline-block"
                                                 ></span>
                                               )}
                                             </div>
@@ -1489,11 +1489,11 @@ function ProblemsPage() {
                                                   className={`w-3.5 h-3.5 transition ${
                                                     bookmarkedIds.has(String(problem._id))
                                                       ? 'fill-amber-400 text-amber-400'
-                                                      : 'text-zinc-600 hover:text-amber-400'
+                                                      : 'text-slate-300 dark:text-zinc-600 hover:text-amber-500'
                                                   }`}
                                                 />
                                               </button>
-                                              <span className="font-semibold text-xs sm:text-sm text-zinc-100 group-hover:text-amber-400 transition truncate">
+                                              <span className="font-semibold text-xs sm:text-sm text-slate-800 dark:text-zinc-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition truncate">
                                                 {problem.problemNumber != null ? `#${problem.problemNumber}. ` : ''}{problem.title}
                                               </span>
                                             </div>
@@ -1504,7 +1504,7 @@ function ProblemsPage() {
                                                 problem.companies.map((comp) => (
                                                   <span
                                                     key={comp}
-                                                    className="px-2 py-0.5 bg-zinc-800 rounded-md text-[10px] font-bold text-zinc-300 border border-zinc-700/50"
+                                                    className="px-2 py-0.5 bg-slate-100 dark:bg-zinc-800 rounded-md text-[10px] font-bold text-slate-600 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700/50"
                                                   >
                                                     {comp}
                                                   </span>
@@ -1514,13 +1514,13 @@ function ProblemsPage() {
                                                   {normalizeTags(problem.tags).slice(0, 3).map((tag) => (
                                                     <span
                                                       key={tag}
-                                                      className="px-2 py-0.5 bg-zinc-800/80 text-zinc-300 border border-zinc-700/50 rounded-md text-[10px] font-semibold"
+                                                      className="px-2 py-0.5 bg-slate-100 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700/50 rounded-md text-[10px] font-semibold"
                                                     >
                                                       {tagLabel(tag)}
                                                     </span>
                                                   ))}
                                                   {normalizeTags(problem.tags).length > 3 && (
-                                                    <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded-md text-[9px] font-bold border border-zinc-700/40">
+                                                    <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 rounded-md text-[9px] font-bold border border-slate-200 dark:border-zinc-700/40">
                                                       +{normalizeTags(problem.tags).length - 3}
                                                     </span>
                                                   )}
@@ -1529,7 +1529,7 @@ function ProblemsPage() {
                                             </div>
 
                                             {/* Submissions */}
-                                            <div className="col-span-2 text-right text-xs font-mono text-zinc-400">
+                                            <div className="col-span-2 text-right text-xs font-mono text-slate-500 dark:text-zinc-400">
                                               {problem.submissions}
                                             </div>
 
@@ -1538,7 +1538,7 @@ function ProblemsPage() {
                                               className={`col-span-1 text-right text-xs font-bold ${
                                                 problem.accuracyVal >= 50
                                                   ? 'text-emerald-400'
-                                                  : 'text-zinc-400'
+                                                  : 'text-slate-500 dark:text-zinc-400'
                                               }`}
                                             >
                                               {problem.accuracy}
@@ -1565,11 +1565,11 @@ function ProblemsPage() {
               {hierarchicalTopics.map((topic) => (
                 <div
                   key={topic.name}
-                  className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/70 shadow-xs hover:border-zinc-700 hover:shadow-md transition flex flex-col justify-between"
+                  className="p-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/70 shadow-xs hover:border-slate-300 dark:hover:border-zinc-700 hover:shadow-md transition flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                      <span className="font-extrabold text-base text-zinc-100">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+                      <span className="font-extrabold text-base text-slate-900 dark:text-zinc-100">
                         {topic.name}
                       </span>
                       <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
@@ -1578,7 +1578,7 @@ function ProblemsPage() {
                     </div>
 
                     <div className="pt-3.5 space-y-2">
-                      <p className="text-xs text-zinc-400 font-medium">
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
                         Difficulty Tiers:
                       </p>
                       <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
@@ -1613,8 +1613,8 @@ function ProblemsPage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-zinc-800 flex items-center justify-between">
-                    <span className="text-xs text-zinc-400">
+                  <div className="pt-4 mt-4 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-500 dark:text-zinc-400">
                       {topic.totalCount} Questions Available
                     </span>
                     <button
@@ -1627,7 +1627,7 @@ function ProblemsPage() {
                           [topic.name]: true,
                         }));
                       }}
-                      className="text-xs font-bold text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <span>Explore</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -1640,10 +1640,10 @@ function ProblemsPage() {
 
           {/* Pagination Controls */}
           {totalProblems > 0 && (
-            <div className="px-6 py-4 border-t border-zinc-800 bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-xs text-zinc-400 font-medium">
-                Showing page <span className="font-bold text-zinc-200">{page}</span> of{' '}
-                <span className="font-bold text-zinc-200">{totalPages || 1}</span> ({totalProblems} {totalProblems === 1 ? 'problem' : 'problems'})
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                Showing page <span className="font-bold text-slate-800 dark:text-zinc-200">{page}</span> of{' '}
+                <span className="font-bold text-slate-800 dark:text-zinc-200">{totalPages || 1}</span> ({totalProblems} {totalProblems === 1 ? 'problem' : 'problems'})
               </div>
 
               <div className="flex items-center space-x-1.5">
@@ -1651,7 +1651,7 @@ function ProblemsPage() {
                   type="button"
                   onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
                   disabled={page <= 1 || loading}
-                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
                 >
                   Previous
                 </button>
@@ -1667,7 +1667,7 @@ function ProblemsPage() {
                       className={`w-7 h-7 rounded-lg text-xs font-bold transition flex items-center justify-center cursor-pointer ${
                         pNum === page
                           ? 'bg-amber-500 text-zinc-950 shadow-xs font-bold'
-                          : 'bg-zinc-900 border border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                          : 'bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800'
                       }`}
                     >
                       {pNum}
@@ -1678,7 +1678,7 @@ function ProblemsPage() {
                   type="button"
                   onClick={() => setPage((prev) => Math.min(prev + 1, totalPages || 1))}
                   disabled={page >= (totalPages || 1) || loading}
-                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs font-bold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
                 >
                   Next
                 </button>
@@ -1690,7 +1690,7 @@ function ProblemsPage() {
 
       {/* 3. TOAST NOTIFICATION */}
       <div
-        className={`fixed bottom-6 right-6 z-50 bg-zinc-900 text-zinc-100 px-4 py-2.5 rounded-xl shadow-2xl text-xs flex items-center space-x-2.5 transform transition-all duration-300 border border-zinc-700 ${
+        className={`fixed bottom-6 right-6 z-50 bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 px-4 py-2.5 rounded-xl shadow-2xl text-xs flex items-center space-x-2.5 transform transition-all duration-300 border border-slate-200 dark:border-zinc-700 ${
           toast.show
             ? 'translate-y-0 opacity-100'
             : 'translate-y-20 opacity-0 pointer-events-none'

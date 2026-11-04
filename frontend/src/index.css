@@ -5,11 +5,20 @@
 
 html {
   scroll-behavior: smooth;
+  color-scheme: light;
+}
+
+html.dark {
   color-scheme: dark;
 }
 
 body {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #0f172a;
+  background-color: #f8fafc;
+}
+
+html.dark body {
   color: #f4f4f5;
   background-color: #09090b;
 }
@@ -114,6 +123,10 @@ body {
 
 /* Dark Mode Architectural Overrides */
 html.dark {
+  color-scheme: light;
+}
+
+html.dark {
   color-scheme: dark;
 }
 
@@ -172,7 +185,7 @@ html.dark .bg-slate-100 {
   background-color: #27272a;
 }
 html.dark .text-slate-900 {
-  color: #f4f4f5;
+  color: #0f172a;
 }
 html.dark .text-slate-800 {
   color: #e4e4e7;
@@ -196,6 +209,11 @@ html.dark .bg-base-100 {
   background-color: #18181b;
 }
 html.dark .bg-base-200 {
+  background-color: #f8fafc;
+}
+
+html.dark body {
+  color: #f4f4f5;
   background-color: #09090b;
 }
 
