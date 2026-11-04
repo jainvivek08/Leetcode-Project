@@ -3,7 +3,7 @@ const User =  require("../models/user");
 const Submission = require("../models/submission");
 const mongoose = require("mongoose");
 const validate = require('../utils/validator');
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const jwt = require('jsonwebtoken');
 const { getCookieOptions, getClearCookieOptions, getJwtExpiresInSeconds } = require("../utils/cookieOptions");
 

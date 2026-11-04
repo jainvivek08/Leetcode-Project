@@ -2,7 +2,10 @@ import axios from "axios";
 
 const isProduction = Boolean(import.meta.env.PROD);
 const defaultBaseUrl = isProduction ? '/api' : 'http://localhost:3000/api';
-const apiBaseUrl = (import.meta.env.VITE_API_URL || defaultBaseUrl).replace(/\/+$/, '');
+let apiBaseUrl = (import.meta.env.VITE_API_URL || defaultBaseUrl).replace(/\/+$/, '');
+if (apiBaseUrl.startsWith('http') && !apiBaseUrl.endsWith('/api')) {
+    apiBaseUrl = `${apiBaseUrl}/api`;
+}
 
 const axiosClient = axios.create({
     baseURL: apiBaseUrl,

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { EJSON } = require('bson');
 
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });

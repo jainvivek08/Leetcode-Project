@@ -12,7 +12,9 @@ if (process.env.ALLOW_MEMORY_BLOCKLIST !== 'true') {
 const missingEnv = requiredEnv.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {
     console.error(`FATAL ERROR: Missing required environment variables: ${missingEnv.join(', ')}`);
-    process.exit(1);
+    if (!process.env.VERCEL) {
+        process.exit(1);
+    }
 }
 
 // Reverse proxy trust setting
@@ -84,7 +86,7 @@ if (!isProduction || hasCustomCors) {
 
     app.use(cors({
         origin: (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin)) {
+            if (!origin || allowedOrigins.includes(origin) || (typeof origin === 'string' && origin.endsWith('.vercel.app'))) {
                 return callback(null, true);
             }
             return callback(null, false);
@@ -169,7 +171,10 @@ app.use(errorHandler);
 
 const InitalizeConnection = async ()=>{
     try{
-        const connectTasks = [main()];
+        const connectTasks = [main().catch(err => {
+            console.error("⚠️ MongoDB connection error:", err.message);
+            console.error("👉 Please set DB_CONNECT_STRING in backend/.env with your MongoDB Atlas URI");
+        })];
         if (redisClient && !redisClient.isOpen) {
             connectTasks.push(redisClient.connect().catch((err) => {
                 if (process.env.ALLOW_MEMORY_BLOCKLIST === 'true') {
@@ -181,10 +186,12 @@ const InitalizeConnection = async ()=>{
         }
 
         await Promise.all(connectTasks);
-        console.log("DB Connected");
+        if (mongoose.connection.readyState === 1) {
+            console.log("DB Connected");
+        }
 
         // Startup cleanup: Mark any 'pending' submissions older than 10 minutes as 'error'
-        try {
+        if (mongoose.connection.readyState === 1) try {
             const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
             const cleanupResult = await Submission.updateMany(
                 { status: 'pending', createdAt: { $lt: tenMinutesAgo } },

@@ -1,5 +1,5 @@
 const path = require('path');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 
 // Load environment configuration
