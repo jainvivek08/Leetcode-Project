@@ -4,7 +4,7 @@ const getJwtExpiresInSeconds = () => {
 };
 
 const getCookieOptions = (overrides = {}) => {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   const sameSite = isProduction ? 'none' : 'lax';
   const secure = isProduction;
 
@@ -18,7 +18,7 @@ const getCookieOptions = (overrides = {}) => {
 };
 
 const getClearCookieOptions = (overrides = {}) => {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   const sameSite = isProduction ? 'none' : 'lax';
   const secure = isProduction;
 
