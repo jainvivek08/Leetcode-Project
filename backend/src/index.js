@@ -90,28 +90,25 @@ app.use(async (req, res, next) => {
 });
 
 
-// CORS: active in dev or when external CORS_ORIGIN / CLIENT_URL is specified
-const hasCustomCors = !!(process.env.CORS_ORIGIN || process.env.CLIENT_URL);
-if (!isProduction || hasCustomCors) {
-    const configuredCorsOrigin = process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:5173';
-    const allowedOrigins = [
-        ...configuredCorsOrigin.split(',').map((o) => o.trim()),
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://localhost:5174',
-        'http://127.0.0.1:5174'
-    ].filter(Boolean);
+// CORS: Always active with credentials support for local dev and any *.vercel.app frontend
+const configuredCorsOrigin = process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:5173';
+const allowedOrigins = [
+    ...configuredCorsOrigin.split(',').map((o) => o.trim()),
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174'
+].filter(Boolean);
 
-    app.use(cors({
-        origin: (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin) || (typeof origin === 'string' && origin.endsWith('.vercel.app'))) {
-                return callback(null, true);
-            }
-            return callback(null, false);
-        },
-        credentials: true 
-    }));
-}
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || (typeof origin === 'string' && origin.endsWith('.vercel.app'))) {
+            return callback(null, true);
+        }
+        return callback(null, false);
+    },
+    credentials: true 
+}));
 
 // Global general rate limiter (configurable via GENERAL_RATE_LIMIT_MAX / GENERAL_RATE_LIMIT_WINDOW_MINUTES, skips frequent read routes)
 app.use(generalLimiter);
