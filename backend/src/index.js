@@ -285,6 +285,11 @@ if (require.main === module) {
     InitalizeConnection();
 }
 
-module.exports = { app, InitalizeConnection };
+// Export Express app directly as the default export for Vercel Serverless Function,
+// while preserving named exports for existing require calls.
+module.exports = app;
+module.exports.app = app;
+module.exports.InitalizeConnection = InitalizeConnection;
+module.exports.default = app;
 
 
