@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express')
 const app = express();
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
@@ -72,6 +73,23 @@ const { generalLimiter } = require('./middleware/rateLimiters');
 const errorHandler = require('./middleware/errorHandler');
 const Submission = require('./models/submission');
 
+// Auto-connect MongoDB on incoming serverless request
+let isDbConnected = false;
+app.use(async (req, res, next) => {
+    if (!isDbConnected || mongoose.connection.readyState !== 1) {
+        if (process.env.DB_CONNECT_STRING) {
+            try {
+                await main();
+                isDbConnected = true;
+            } catch (err) {
+                console.error('MongoDB serverless connection error:', err.message);
+            }
+        }
+    }
+    next();
+});
+
+
 // CORS: active in dev or when external CORS_ORIGIN / CLIENT_URL is specified
 const hasCustomCors = !!(process.env.CORS_ORIGIN || process.env.CLIENT_URL);
 if (!isProduction || hasCustomCors) {
@@ -128,6 +146,25 @@ const healthHandler = (req, res) => {
 
 const { getLeaderboard } = require('./controllers/userAuthent');
 
+
+// Root API info endpoint (returns 200 JSON for API health / status)
+app.get('/', (req, res, next) => {
+    const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+    if (isProduction && fs.existsSync(path.join(frontendDist, 'index.html'))) {
+        return next();
+    }
+    return res.status(200).json({
+        status: "online",
+        service: "CodeQuest Backend API",
+        version: "1.0.0",
+        endpoints: {
+            health: "/health",
+            api: "/api",
+            leaderboard: "/api/leaderboard"
+        }
+    });
+});
+
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 app.get('/api/leaderboard', getLeaderboard);
@@ -151,18 +188,21 @@ if (!isProduction) {
     app.use('/discussion', discussionRouter);
 }
 
-// Production Static SPA Serving (Express)
+// Production Static SPA Serving (Express) - only if frontend dist actually exists on disk
 if (isProduction) {
     const frontendDist = path.resolve(__dirname, '../../frontend/dist');
-    app.use(express.static(frontendDist));
+    const indexHtml = path.join(frontendDist, 'index.html');
+    if (fs.existsSync(indexHtml)) {
+        app.use(express.static(frontendDist));
 
-    // SPA catch-all handler: for any GET request that does NOT start with /api/, serve index.html
-    app.use((req, res, next) => {
-        if (req.method === 'GET' && !req.originalUrl.startsWith('/api/') && req.originalUrl !== '/health') {
-            return res.sendFile(path.join(frontendDist, 'index.html'));
-        }
-        next();
-    });
+        // SPA catch-all handler: for any GET request that does NOT start with /api/, serve index.html
+        app.use((req, res, next) => {
+            if (req.method === 'GET' && !req.originalUrl.startsWith('/api/') && req.originalUrl !== '/health') {
+                return res.sendFile(indexHtml);
+            }
+            next();
+        });
+    }
 }
 
 // Centralized error handling middleware (must be mounted after all routes)
