@@ -2,6 +2,15 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express')
 const app = express();
+
+// Normalize Vercel rewritten serverless request URLs
+app.use((req, res, next) => {
+    const matchedPath = req.headers['x-matched-path'];
+    if (matchedPath && (req.url === '/api/index.js' || req.url === '/api' || req.url.startsWith('/api/index.js'))) {
+        req.url = matchedPath;
+    }
+    next();
+});
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 require('dotenv').config();
 
@@ -144,8 +153,11 @@ const healthHandler = (req, res) => {
 const { getLeaderboard } = require('./controllers/userAuthent');
 
 
+// Favicon handler (no-content, prevents unneeded 404s)
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // Root API info endpoint (returns 200 JSON for API health / status)
-app.get('/', (req, res, next) => {
+const rootInfoHandler = (req, res, next) => {
     const frontendDist = path.resolve(__dirname, '../../frontend/dist');
     if (isProduction && fs.existsSync(path.join(frontendDist, 'index.html'))) {
         return next();
@@ -160,7 +172,11 @@ app.get('/', (req, res, next) => {
             leaderboard: "/api/leaderboard"
         }
     });
-});
+};
+
+app.get('/', rootInfoHandler);
+app.get('/api', rootInfoHandler);
+app.get('/api/index.js', rootInfoHandler);
 
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
@@ -204,6 +220,15 @@ if (isProduction) {
 
 // Centralized error handling middleware (must be mounted after all routes)
 app.use(errorHandler);
+
+// Catch-all 404 handler for unhandled routes (prevents Express 5 finalhandler stream unpipe crash on Vercel)
+app.use((req, res) => {
+    return res.status(404).json({
+        error: "Route not found",
+        path: req.originalUrl || req.url,
+        method: req.method
+    });
+});
 
 
 const InitalizeConnection = async ()=>{
